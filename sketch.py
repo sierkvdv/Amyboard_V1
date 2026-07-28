@@ -20,7 +20,7 @@ import micropython
 import midi
 import tulip
 
-VERSION = 'v0.9.1'
+VERSION = 'v0.10'
 WASH_OSC = 100
 LFO_OSC = 101
 CHOP_OSCS = (110, 111, 112)
@@ -142,6 +142,8 @@ _lfo_ok = False
 _running = True        # transport: follows BeatStep play/stop once seen
 _transport_evt = 0     # 1 = start received, 2 = stop received (set in cb)
 _melody = []           # last note-ons from the BeatStep (ring of 8)
+_fire = []             # incoming notes to fire as immediate sample hits
+_hit_flash = 0         # frames of on-screen feedback per live hit
 _midi_notes = 0        # counters, readable over the REPL for verification
 _midi_transport = 0
 
@@ -162,6 +164,8 @@ def _on_midi(m):
             _melody.append(b[1])
             if len(_melody) > 8:
                 _melody.pop(0)
+            if len(_fire) < 8:
+                _fire.append((b[1], b[2]))  # play it NOW (also while paused)
             _midi_notes += 1
     except Exception:
         pass
@@ -352,9 +356,19 @@ def loop(*args):
 def _service(_arg):
     global _level, _peak_avg, _flash, _cooldown, _frame, _errors, _last_render
     global _auto_armed, _last_reroll_tick, _enc_pos, _btn_down, _density
-    global _running, _transport_evt, _svc_pending
+    global _running, _transport_evt, _svc_pending, _osc_rot, _hit_flash
     _svc_pending = False
     try:
+        # live fire: every incoming note plays the caught sample at that
+        # pitch immediately — transport state irrelevant (solo on pause!)
+        while _fire:
+            n, v = _fire.pop(0)
+            _hit_flash = 2  # always show reception, even before a catch
+            if _have_sample and not _rec_until:
+                _osc_rot += 1
+                amy.send(osc=CHOP_OSCS[_osc_rot % 3], wave=amy.PCM,
+                         preset=CATCH_PRESET, note=n,
+                         vel=0.4 + 0.6 * v / 127.0, amp={'const': 3.5})
         now = time.ticks_ms()
 
         # finish a running catch as soon as its window has passed
@@ -455,6 +469,10 @@ def _service(_arg):
         if _flash:
             _draw_bolt()
             _flash -= 1
+
+        if _hit_flash:  # visual feedback for live-fired notes
+            _d.fill_rect(0, 108, 128, 3, 15)
+            _hit_flash -= 1
 
         # status bar
         if _level < 0.06:
