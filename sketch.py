@@ -1,5 +1,8 @@
-# WEERMACHINE v0.15 — resident sketch: WASH + weather display + STORMVANGER.
-# New in v0.15:
+# WEERMACHINE v0.16 — resident sketch: WASH + weather display + STORMVANGER.
+# New in v0.16:
+#  - pads behave like keys: the sample sounds WHILE held and fades on
+#    release (note-off). Machine hits unaffected.
+# v0.15:
 #  - TONEN menu item: the beats wander in pitch per bar — 0 sticks to
 #    your melody, 10 jumps wildly (up to +/- an octave)
 #  - big menu box on screen (name + value + position dots): clicking
@@ -27,7 +30,7 @@ import micropython
 import midi
 import tulip
 
-VERSION = 'v0.15.5'
+VERSION = 'v0.16'
 WASH_OSC = 100
 LFO_OSC = 101
 CHOP_OSCS = (110, 111, 112)
@@ -173,6 +176,8 @@ _running = True        # transport: follows BeatStep play/stop once seen
 _transport_evt = 0     # 1 = start received, 2 = stop received (set in cb)
 _melody = []           # last note-ons from the BeatStep (ring of 8)
 _fire = []             # incoming notes to fire as immediate sample hits
+_noteoff = []          # incoming note-offs: pads sound WHILE held
+_live = []             # (note, osc) pairs currently held by the player
 _hit_flash = 0         # frames of on-screen feedback per live hit
 _midi_notes = 0        # counters, readable over the REPL for verification
 _midi_transport = 0
@@ -197,6 +202,10 @@ def _on_midi(m):
             if len(_fire) < 8:
                 _fire.append((b[1], b[2]))  # play it NOW (also while paused)
             _midi_notes += 1
+        elif len(b) == 3 and ((b[0] & 0xF0) == 0x80 or
+                              ((b[0] & 0xF0) == 0x90 and b[2] == 0)):
+            if len(_noteoff) < 8:
+                _noteoff.append(b[1])  # release -> fade that voice out
     except Exception:
         pass
 
@@ -454,6 +463,7 @@ def _beat_engine():
             if cut < 60:
                 cut = 60
             _cuts = [c for c in _cuts if c[0] != osc]
+            _live[:] = [e for e in _live if e[1] != osc]
             _cuts.append((osc, time.ticks_add(time.ticks_ms(), int(cut))))
 
 
@@ -461,6 +471,7 @@ def stilte():
     global _pattern, _cuts
     _pattern = []
     _cuts = []
+    del _live[:]
     for osc in CHOP_OSCS:
         amy.send(osc=osc, vel=0)
 
@@ -642,17 +653,16 @@ def _service(_arg):
                 _osc_rot += 1
                 osc = CHOP_OSCS[_osc_rot % 3]
                 _cuts = [c for c in _cuts if c[0] != osc]
+                _live[:] = [e for e in _live if e[1] != osc]
                 amy.send(osc=osc, wave=amy.PCM,
                          preset=CATCH_PRESET, note=n,
                          vel=0.4 + 0.6 * v / 127.0,
                          amp={'const': 3.5, 'vel': 1, 'eg0': 1})
-                # velocity = length: a soft tap is a short tick, a hard
-                # hit rings almost fully — always fading before the
-                # recording's clicky end (pitch-aware window)
+                _live.append((n, osc))
+                # safety net: even a held pad fades before the
+                # recording's clicky end (pitch-aware window) — the
+                # normal stop is the RELEASE of the pad (note-off)
                 dur = 2000 / (2.0 ** ((n - 60) / 12.0)) - 200
-                vd = 120 + v * v * 1700 // 16129  # 30->~215ms, 127->1820
-                if vd < dur:
-                    dur = vd
                 if dur < 60:
                     dur = 60
                 elif dur > 1800:
@@ -660,6 +670,15 @@ def _service(_arg):
                 _cuts.append((osc, time.ticks_add(time.ticks_ms(),
                                                   int(dur))))
         now = time.ticks_ms()
+
+        # releases: a pad sounds only while held — note-off fades it out
+        while _noteoff:
+            nn = _noteoff.pop(0)
+            for k in range(len(_live) - 1, -1, -1):
+                if _live[k][0] == nn:
+                    _cuts.append((_live[k][1], now))
+                    _live.pop(k)
+                    break
 
         # timed note-offs: keep machine hits short at low STORM values
         if _cuts:
