@@ -27,7 +27,7 @@ import micropython
 import midi
 import tulip
 
-VERSION = 'v0.15.3'
+VERSION = 'v0.15.4'
 WASH_OSC = 100
 LFO_OSC = 101
 CHOP_OSCS = (110, 111, 112)
@@ -246,6 +246,19 @@ def start_catch(beats=4):
                 mv[j + 1] = src[i + 1]
                 j += 2
                 i -= 8
+        # bake fade edges in: the copy starts/ends mid-waveform and a
+        # raw step at either end clicks on every reverse hit
+        if j >= 2048:
+            head = 256   # ~12 ms at 22.05 kHz
+            tail = 512   # ~23 ms
+            for k in range(head):
+                off = k * 2
+                v = struct.unpack_from('<h', out, off)[0]
+                struct.pack_into('<h', out, off, v * k // head)
+            for k in range(tail):
+                off = j - 2 - k * 2
+                v = struct.unpack_from('<h', out, off)[0]
+                struct.pack_into('<h', out, off, v * k // tail)
         _rev_bytes = bytes(mv[0:j])
     except Exception as e:
         print('reverse capture failed:', e)
@@ -425,12 +438,23 @@ def _beat_engine():
                      preset=REV_PRESET if rev else CATCH_PRESET,
                      note=n, vel=vel,
                      amp={'const': 3.5, 'vel': 1, 'eg0': 1})
+            # every hit fades out BEFORE the recording's abrupt end (the
+            # raw end mid-waveform clicks). Playback speed scales with
+            # pitch, so the window shrinks for high hits.
+            base = 1000 if rev else 2000
+            dur = base / (2.0 ** ((n - 60) / 12.0)) - 200
             if _density <= 8:
                 # calm = a short tick, the echo/reverb do the fading;
-                # further open = longer fragments; 9+ rings out in full
-                _cuts = [c for c in _cuts if c[0] != osc]
-                _cuts.append((osc, time.ticks_add(
-                    time.ticks_ms(), 80 + _density * 45)))
+                # further open = longer fragments
+                cut = 80 + _density * 45
+                if cut > dur:
+                    cut = dur
+            else:
+                cut = dur  # 9+ rings out almost fully, then fades
+            if cut < 60:
+                cut = 60
+            _cuts = [c for c in _cuts if c[0] != osc]
+            _cuts.append((osc, time.ticks_add(time.ticks_ms(), int(cut))))
 
 
 def stilte():
@@ -617,11 +641,20 @@ def _service(_arg):
             if _have_sample and not _rec_until:
                 _osc_rot += 1
                 osc = CHOP_OSCS[_osc_rot % 3]
-                _cuts = [c for c in _cuts if c[0] != osc]  # pads ring full
+                _cuts = [c for c in _cuts if c[0] != osc]
                 amy.send(osc=osc, wave=amy.PCM,
                          preset=CATCH_PRESET, note=n,
                          vel=0.4 + 0.6 * v / 127.0,
                          amp={'const': 3.5, 'vel': 1, 'eg0': 1})
+                # pads ring almost fully, but still fade before the
+                # recording's clicky end (pitch-aware window)
+                dur = 2000 / (2.0 ** ((n - 60) / 12.0)) - 200
+                if dur < 60:
+                    dur = 60
+                elif dur > 1800:
+                    dur = 1800
+                _cuts.append((osc, time.ticks_add(time.ticks_ms(),
+                                                  int(dur))))
         now = time.ticks_ms()
 
         # timed note-offs: keep machine hits short at low STORM values
