@@ -13,12 +13,14 @@ import random
 import struct
 import time
 
+import _thread
 import amy
 import amyboard
+import micropython
 import midi
 import tulip
 
-VERSION = 'v0.8'
+VERSION = 'v0.9.1'
 WASH_OSC = 100
 LFO_OSC = 101
 CHOP_OSCS = (110, 111, 112)
@@ -341,9 +343,17 @@ def _draw_bolt():
 
 
 def loop(*args):
+    # Deliberately empty. The factory loop() starves whenever external MIDI
+    # clock flows in (verified 2026-07-28: F8 stream -> zero loop calls), so
+    # the machine runs on its own hardware timer instead — see _service().
+    pass
+
+
+def _service(_arg):
     global _level, _peak_avg, _flash, _cooldown, _frame, _errors, _last_render
     global _auto_armed, _last_reroll_tick, _enc_pos, _btn_down, _density
-    global _running, _transport_evt
+    global _running, _transport_evt, _svc_pending
+    _svc_pending = False
     try:
         now = time.ticks_ms()
 
@@ -483,6 +493,30 @@ try:
     midi.add_callback(_on_midi)
 except Exception as e:
     print('midi callback failed:', e)
+
+# ---- our own heartbeat: a background thread drives _service every 30 ms.
+# NOT machine.Timer: hardware timer 3 collided with the firmware and took
+# the whole USB stack down (learned 2026-07-28, the hard way).
+_svc_pending = False
+
+
+def _heartbeat():
+    global _svc_pending
+    while True:
+        if not _svc_pending:
+            _svc_pending = True
+            try:
+                micropython.schedule(_service, 0)
+            except RuntimeError:
+                _svc_pending = False  # scheduler queue full; try next tick
+        time.sleep(0.03)
+
+
+try:
+    _thread.start_new_thread(_heartbeat, ())
+    print('heartbeat thread running (30 ms)')
+except Exception as e:
+    print('heartbeat failed:', e)
 
 # initial face + boot marker
 try:
