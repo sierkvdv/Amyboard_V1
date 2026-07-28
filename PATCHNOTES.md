@@ -53,3 +53,14 @@
 - v0.6: `_clock_follow()` burst-sampelt CV1 12ms per loop-pass, edge-detect met **70ms debounce** (ringing gaf spook-intervallen van 54-60ms), tempo = 60000/(4×kleinste plausibele interval), EMA 0.15, apply 2×/s, terugval naar 120 BPM na 2,5s stilte. Statusbalk toont `CLK <bpm>` bij extern volgen.
 - Getest: BSP display 200 → CLK ~203 gevolgd; draaien volgt binnen seconden. "Muzikaal strak" (meedeinend), niet sample-strak — dat wordt de TRS-MIDI-kabel (M1-afronding).
 - Sessie-einde: volledig instrument op bureau — wash + weerscherm + auto-vangst + knop (vang/intensiteit) + Arturia-tempo-volger. Werktitel Weermachine houdt stand.
+
+## 2026-07-28 (middag) — v0.8 t/m v0.10: MIDI, de grote bevriezing, en speelbaarheid
+
+- **Repo live**: github.com/sierkvdv/Amyboard_V1 (main); map opgeruimd (tests/, tools/, archive/), README met alle firmware-gotchas, patchkaart.html als Artifact gepubliceerd.
+- **v0.8**: BeatStep via TRS MIDI in (met Sierks koptelefoonkabel!): FA/FC = start/stop (RESET_TIMEBASE op play = downbeat op de druk), noten vullen melodie-buffer → chops volgen Sierks toonhoogtes. Bewust GEEN external_midi_sync (bevriest de sketch, bewezen).
+- **DE GROTE BEVRIEZING ONTLEED**: zodra MIDI-clock (F8) binnenstroomt, wordt de fabrieks-loop() nooit meer aangeroepen (ticks lopen — zelfs BSP-lock-step! — maar frames staan stil, MIDI-callbacks leven door). Fabrieks-loop = onbruikbaar bij externe clock.
+- **v0.9 RAMP**: machine.Timer(3) als eigen hartslag → botst met firmware → USB compleet weg. Redding: RST kort, dan direct BOOT ~5s vasthouden (BOOT tijdens ínpluggen = ROM-bootloader, dat is de verkeerde noodstand!).
+- **v0.9.1 DE FIX**: `_thread` achtergrond-draadje (30ms) + micropython.schedule drijft _service(); fabrieks-loop() = no-op. Kanarie-getest, overleeft volle MIDI-stroom. DE architectuur voortaan.
+- **v0.10**: elke binnenkomende noot (alle kanalen: SEQ1/SEQ2/drums/pads) vuurt het sample direct af op die toonhoogte, velocity-gevoelig, óók tijdens PAUZE (solo-modus). Witte flits-streep onderin = visuele ontvangst-bevestiging.
+- **Knop-update**: density 0-12; helemaal links (0, scherm `*-`) = machine-laag stil — Sierks verzoek toen zijn ene SEQ2-noot verzoop. "Begint ergens op te lijken."
+- Volgende: mixer-test (RCA→minijack in line in; pas op rondzing-lus), stereo-kabel bestellen, effect-macro's/droog-stand, drone-laag, PCM_LEFT/preset-1024/loop-starvation bugs melden bij Shore Pine.
