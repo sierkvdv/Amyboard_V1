@@ -14,18 +14,20 @@ import struct
 import time
 
 import _thread
+import gc
 import amy
 import amyboard
 import micropython
 import midi
 import tulip
 
-VERSION = 'v0.10'
+VERSION = 'v0.11'
 WASH_OSC = 100
 LFO_OSC = 101
 CHOP_OSCS = (110, 111, 112)
 CATCH_PRESET = 40  # LOW preset slot! 1024 (per docs) is an invalid
                    # recording slot on fw 2026-07-26 — records vanish.
+REV_PRESET = 41    # Python-built reversed copy (1 s, mono 22.05 kHz)
 TAG_BASE = 300
 PPQ = 48
 BAR = PPQ * 4
@@ -85,6 +87,8 @@ _last_render = 0
 
 _used_tags = set()
 _have_sample = False
+_have_reverse = False
+_rev_bytes = None     # reversed copy waiting for upload after the catch
 _rec_until = 0        # ticks_ms when a running catch ends (0 = not recording)
 _auto_armed = True    # one automatic catch after silence -> audio
 _density = 6
@@ -172,23 +176,68 @@ def _on_midi(m):
 
 
 def start_catch(beats=4):
-    """Begin a non-blocking catch; loop() finishes it when time is up."""
-    global _rec_until
+    """Begin a catch. The C engine records the clean forward sample; we
+    tight-capture 1 s in Python alongside it for the reversed copy
+    (blocks the service ~1.5 s — the screen shows REC, that's fine)."""
+    global _rec_until, _rev_bytes
     if _rec_until:
         return  # already recording
     seconds = beats * 60.0 / 120.0
     stilte()  # hush the beat engine while we record
+    gc.collect()
     amy.start_sample(preset=CATCH_PRESET, source=amy.SAMPLE_FROM_AUDIO_IN,
                      max_frames=int(44100 * seconds))
     _rec_until = time.ticks_add(time.ticks_ms(), int(seconds * 1000) + 100)
+    try:  # show REC right away, since we're about to block a bit
+        _d.fill_rect(0, 114, 128, 14, 0)
+        _d.text('REC', 4, 118, 15)
+        amyboard.display_refresh()
+    except Exception:
+        pass
+    try:
+        blocks = []
+        last = None
+        t0 = time.ticks_ms()
+        while time.ticks_diff(time.ticks_ms(), t0) < 1000:
+            b = amy.get_input_buffer()
+            if b and b != last:
+                blocks.append(b)
+                last = b
+        # build reversed mono 22.05 kHz, block-wise (heap is too small
+        # for one big join — learned via MemoryError)
+        out = bytearray(len(blocks) * 256)
+        mv = memoryview(out)
+        j = 0
+        for bi in range(len(blocks) - 1, -1, -1):
+            src = blocks[bi]
+            i = 1020
+            while i >= 0:
+                mv[j] = src[i]
+                mv[j + 1] = src[i + 1]
+                j += 2
+                i -= 8
+        _rev_bytes = bytes(mv[0:j])
+    except Exception as e:
+        print('reverse capture failed:', e)
+        _rev_bytes = None
 
 
 def _finish_catch():
-    global _rec_until, _have_sample
+    global _rec_until, _have_sample, _have_reverse, _rev_bytes
     try:
         amy.stop_sample()
     except Exception:
         pass
+    if _rev_bytes:
+        try:
+            amy.load_sample_bytes(_rev_bytes, stereo=False, preset=REV_PRESET,
+                                  midinote=60, sr=22050)
+            _have_reverse = True
+        except Exception as e:
+            print('reverse upload failed:', e)
+            _have_reverse = False
+        _rev_bytes = None
+        gc.collect()
     _rec_until = 0
     _have_sample = True
     chaos()
@@ -208,6 +257,9 @@ def chaos():
     intervals = (0, 0, 5, -5, 7, -7, 3, -3)[:2 + _density // 2]
     oct_chance = 1 + _density // 3  # out of 10
     spread = 4 + _density
+    # the middle of the knob (5..8) is the ghost zone: some hits play
+    # the reversed copy; outside it, everything runs forward
+    rev_zone = _have_reverse and 5 <= _density <= 8
     pat = []
     for i in range(_density):
         slot = random.randrange(0, 8)
@@ -218,7 +270,8 @@ def chaos():
         else:
             note = 60 + random.randrange(0, 2 * spread + 1) - spread
         vel = 0.55 + random.randrange(0, 5) / 10.0
-        pat.append((slot, note, vel))
+        rev = rev_zone and random.randrange(0, 100) < 35
+        pat.append((slot, note, vel, rev))
     _pattern = pat
 
 
@@ -317,7 +370,7 @@ def _beat_engine():
         rb = 4 if _density <= 4 else (2 if _density <= 8 else 1)
         if _bar_count % rb == 0:
             chaos()
-    for sl, note, vel in _pattern:
+    for sl, note, vel, rev in _pattern:
         if sl == slot:
             n = note
             if _density >= 5 and random.randrange(0, 8) == 0:
@@ -325,8 +378,8 @@ def _beat_engine():
             n += random.randrange(-15, 16) / 100.0  # weather micro-drift
             _osc_rot += 1
             amy.send(osc=CHOP_OSCS[_osc_rot % 3], wave=amy.PCM,
-                     preset=CATCH_PRESET, note=n, vel=vel,
-                     amp={'const': 3.5})
+                     preset=REV_PRESET if rev else CATCH_PRESET,
+                     note=n, vel=vel, amp={'const': 3.5})
 
 
 def stilte():
