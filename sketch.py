@@ -1,12 +1,10 @@
-# WEERMACHINE v0.4 — resident sketch: WASH + weather display + STORMVANGER.
-# New in v0.4:
-#  - calmer render rate (FRAME_MS 160) so the serial REPL stays responsive
-#  - encoder knob: CLICK = catch 4 beats + fresh chaos pattern,
-#    TURN = chaos density (2..12 hits per bar)
-#  - auto-catch: first time audio appears after silence, catch automatically
-#  - chaos re-rolls itself every 4 bars (evolving, never static)
-#  - non-blocking catch (recording runs while rain keeps falling)
-#  - status bar shows sample state: [*] sample loaded, [REC] catching
+# WEERMACHINE v0.12 — resident sketch: WASH + weather display + STORMVANGER.
+# New in v0.12:
+#  - encoder CLICK steps through a 4-item menu: STORM (density) / ECHO /
+#    GALM (reverb) / ADEM (filter breathing depth); TURN sets the value
+#  - effects are finally playable: ECHO and GALM go all the way to dry (0)
+#  - re-record gesture: keep turning LEFT past the bottom for a moment
+#    (a few extra detents) -> fresh catch. Click no longer records.
 # Recovery: hold BOOT while powering on to skip this sketch.
 
 import random
@@ -21,7 +19,7 @@ import micropython
 import midi
 import tulip
 
-VERSION = 'v0.11'
+VERSION = 'v0.12'
 WASH_OSC = 100
 LFO_OSC = 101
 CHOP_OSCS = (110, 111, 112)
@@ -95,6 +93,16 @@ _density = 6
 _last_reroll_tick = 0
 _enc_pos = 0
 _btn_down = False
+
+# ---- encoder menu (v0.12): click steps items, turn sets the value ----
+MENU_ITEMS = ('STORM', 'ECHO', 'GALM', 'ADEM')
+_menu = 0             # index into MENU_ITEMS; STORM = the density knob
+_menu_flash = 0       # ticks_ms deadline: show "ITEM value" in status bar
+_echo_lvl = 5         # 0..10 -> amy.echo level 0.0..1.0 (0 = dry)
+_verb_lvl = 8         # 0..10 -> amy.reverb level 0.0..1.0 (0 = dry)
+_breath = 4           # 0..10 -> filter LFO mod depth 0.0..1.0 (0 = still)
+_rewind = 0           # extra left-detents past the bottom (re-record gesture)
+_rewind_t = 0
 
 
 def _input_peak():
@@ -389,6 +397,21 @@ def stilte():
         amy.send(osc=osc, vel=0)
 
 
+def _apply_fx(item):
+    """Re-send one effect with its current menu value. Uses the exact same
+    calls as setup_audio(), only the level changes — 0 means dry/still."""
+    try:
+        if item == 1:
+            amy.echo(_echo_lvl / 10.0, 500, 1000, 0.6, 0.5)
+        elif item == 2:
+            amy.reverb(_verb_lvl / 10.0, 0.97, 0.4, 3000)
+        elif item == 3:
+            amy.send(osc=WASH_OSC,
+                     filter_freq={'const': 2600, 'mod': _breath / 10.0})
+    except Exception as e:
+        print('fx apply failed:', e)
+
+
 # ---- drawing ----
 def _spawn_drop():
     _drops.append([random.randrange(2, 126),
@@ -427,6 +450,8 @@ def _service(_arg):
     global _level, _peak_avg, _flash, _cooldown, _frame, _errors, _last_render
     global _auto_armed, _last_reroll_tick, _enc_pos, _btn_down, _density
     global _running, _transport_evt, _svc_pending, _osc_rot, _hit_flash
+    global _menu, _menu_flash, _echo_lvl, _verb_lvl, _breath
+    global _rewind, _rewind_t
     _svc_pending = False
     try:
         # live fire: every incoming note plays the caught sample at that
@@ -486,22 +511,52 @@ def _service(_arg):
         if _level < 0.03 and not _auto_armed and not _rec_until:
             _auto_armed = True  # re-arm during silence for next session
 
-        # encoder: click = new catch, turn = chaos density
+        # encoder: click = next menu item, turn = value of that item,
+        # keep turning left past the bottom = fresh catch (re-record)
         if _has_enc and _frame % 2 == 0:
             try:
                 pos = _enc.read(0)
                 if pos != _enc_pos:
                     delta = pos - _enc_pos
                     _enc_pos = pos
-                    _density = max(0, min(12, _density + delta))
-                    if _have_sample:
-                        chaos()
-                        if _density <= 0:
-                            for osc in CHOP_OSCS:
-                                amy.send(osc=osc, vel=0)
+                    _menu_flash = time.ticks_add(now, 2000)
+                    if _menu == 0:
+                        at_min = _density <= 0
+                        _density = max(0, min(12, _density + delta))
+                        if _have_sample:
+                            chaos()
+                            if _density <= 0:
+                                for osc in CHOP_OSCS:
+                                    amy.send(osc=osc, vel=0)
+                    elif _menu == 1:
+                        at_min = _echo_lvl <= 0
+                        _echo_lvl = max(0, min(10, _echo_lvl + delta))
+                        _apply_fx(1)
+                    elif _menu == 2:
+                        at_min = _verb_lvl <= 0
+                        _verb_lvl = max(0, min(10, _verb_lvl + delta))
+                        _apply_fx(2)
+                    else:
+                        at_min = _breath <= 0
+                        _breath = max(0, min(10, _breath + delta))
+                        _apply_fx(3)
+                    # re-record: extra left-detents while already at the
+                    # bottom accumulate; enough of them within ~1.5 s = REC
+                    if delta < 0 and at_min:
+                        if time.ticks_diff(now, _rewind_t) > 1500:
+                            _rewind = 0
+                        _rewind += -delta
+                        _rewind_t = now
+                        if _rewind >= 6:
+                            _rewind = 0
+                            start_catch(4)
+                    else:
+                        _rewind = 0
                 pressed = _enc.button(0)
                 if pressed and not _btn_down:
-                    start_catch(4)
+                    _menu = (_menu + 1) % len(MENU_ITEMS)
+                    _menu_flash = time.ticks_add(now, 2000)
+                    _rewind = 0
                 _btn_down = pressed
             except Exception:
                 pass
@@ -568,8 +623,23 @@ def _service(_arg):
             bpm_txt = 'CLK%3d' % int(_ext_bpm + 0.5)  # following Arturia
         else:
             bpm_txt = '%3d' % int(tulip.seq_bpm() + 0.5)
+        if _rewind and time.ticks_diff(now, _rewind_t) > 1500:
+            _rewind = 0  # gesture abandoned
         _d.fill_rect(0, 114, 128, 14, 0)
-        _d.text('%-6s %s %s' % (weather, bpm_txt, tag_txt), 4, 118, 15)
+        if _rewind and not _rec_until:
+            _d.text('REC? ' + '<' * min(6, _rewind), 4, 118, 15)
+        elif time.ticks_diff(_menu_flash, now) > 0 and not _rec_until:
+            if _menu == 0:
+                val = '-' if _density <= 0 else str(_density)
+            elif _menu == 1:
+                val = str(_echo_lvl)
+            elif _menu == 2:
+                val = str(_verb_lvl)
+            else:
+                val = str(_breath)
+            _d.text('%s %s' % (MENU_ITEMS[_menu], val), 4, 118, 15)
+        else:
+            _d.text('%-6s %s %s' % (weather, bpm_txt, tag_txt), 4, 118, 15)
 
         amyboard.display_refresh()
     except Exception as e:

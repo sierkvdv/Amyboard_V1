@@ -64,3 +64,20 @@
 - **v0.10**: elke binnenkomende noot (alle kanalen: SEQ1/SEQ2/drums/pads) vuurt het sample direct af op die toonhoogte, velocity-gevoelig, óók tijdens PAUZE (solo-modus). Witte flits-streep onderin = visuele ontvangst-bevestiging.
 - **Knop-update**: density 0-12; helemaal links (0, scherm `*-`) = machine-laag stil — Sierks verzoek toen zijn ene SEQ2-noot verzoop. "Begint ergens op te lijken."
 - Volgende: mixer-test (RCA→minijack in line in; pas op rondzing-lus), stereo-kabel bestellen, effect-macro's/droog-stand, drone-laag, PCM_LEFT/preset-1024/loop-starvation bugs melden bij Shore Pine.
+
+## 2026-07-28 (middag) — v0.11: karakter-knop + REVERSE-SPOKEN in de midden-zone ✅
+
+- **Knop stuurt karakter, niet alleen aantal** (Sierk: "wordt wel gekker maar nog wel beetje zelfde"): interval-palet groeit mee met density (±5 → +kwinten → +7 → +tertsen), octaafsprong-kans stijgt, her-rol elke 4/2/1 maten (density ≤4/≤8/erboven), per-hit vlaag-noten (±5/±7, 1-op-8 bij density ≥5) en micro-drift ±15 cent zodat herhaalde slagen nooit identiek klinken.
+- **REVERSE (Sierks wens: "in het midden reverse ofzo, daarbuiten niet")**: tijdens elke vangst draait een tweede vanger mee — 1 s lang `amy.get_input_buffer()` strak pollen (1024 B = 256 stereo-frames, ~172 blokken/s, dedup op inhoud), daarvan blok-voor-blok een omgekeerde mono-kopie op 22,05 kHz bouwen en uploaden via `amy.load_sample_bytes(..., preset=41, sr=22050)`.
+- **Geheugen-les (2× MemoryError)**: één grote join van 347 KB kán niet op deze heap, en zelfs 87 KB naast de vastgehouden blokken niet → venster naar 1 s en de omkering blok-voor-blok rechtstreeks in een kleine buffer schrijven. `tests/bench_reverse.py` bewijst de timings op het board: capture 171/172 blokken, build 525 ms, upload 244 ms.
+- **Gedrag**: alleen in de midden-zone van de knop (density 5-8) wordt ~35% van de hits omgekeerd afgespeeld (preset 41 i.p.v. 40); links en rechts daarvan blijft alles vooruit. Geen reverse-materiaal (oude vangst) = gewoon vooruit.
+- Gedeployed en levend: "versie: v0.11 | leeft: True | errors: 0". Oor-test door Sierk staat nog open (knop naar `*5`-`*8`, verse vangst, luister naar achteruit-spoken tussen de beats).
+
+## 2026-07-28 (middag) — v0.12: KNOP-MENU — effecten eindelijk speelbaar ✅
+
+- Sierks verzoek: "handig als je met clicken door menutje kan om effecten te veranderen... en als je helemaal naar links draait paar seconden moet die opnieuw gaan opnemen."
+- **Klik = menustap** door 4 items: `STORM` (density 0-12, incl. reverse-zone 5-8) → `ECHO` (0-10, 0 = droog) → `GALM` (reverb 0-10, 0 = droog) → `ADEM` (filter-ademdiepte 0-10, 0 = stil). **Draaien = waarde** van het actieve item. Statusbalk toont 2 s lang "ITEM waarde" na elke klik/draai.
+- Dit lost de oude klacht op ("er speelt constant soort effect overheen waar we niks in kunnen wijzigen, erg saai"): echo en galm kunnen nu tot volledig droog.
+- **Opnieuw opnemen = doordraai-gebaar**: als de waarde al op de bodem staat en je blijft naar links draaien (6 extra klikjes binnen ~1,5 s), start een verse vangst. Scherm toont `REC? <<<` als voortgang; loslaten = gebaar vervalt. Klik neemt dus níet meer op.
+- Effect-calls zijn exact dezelfde als in setup_audio() (amy.echo/amy.reverb/filter_freq-mod), alleen het level verandert — geen nieuwe API's verzonnen.
+- Board-verificatie: v0.12 boot schoon (errors 0, frames lopen), alle drie _apply_fx-calls draaien zonder fout terwijl de machine doorloopt. Oor-test Sierk: staat open (klik 1× → ECHO, draai naar 0, hoor 'm droog worden).
