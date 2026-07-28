@@ -27,7 +27,7 @@ import micropython
 import midi
 import tulip
 
-VERSION = 'v0.15.2'
+VERSION = 'v0.15.3'
 WASH_OSC = 100
 LFO_OSC = 101
 CHOP_OSCS = (110, 111, 112)
@@ -229,6 +229,10 @@ def start_catch(beats=4):
             if b and b != last:
                 blocks.append(b)
                 last = b
+            # breathe: hammering the C API nonstop starves the audio task
+            # and crackles the output during the catch (blocks arrive
+            # every ~5.8 ms, so a 2 ms nap loses next to nothing)
+            time.sleep_ms(2)
         # build reversed mono 22.05 kHz, block-wise (heap is too small
         # for one big join — learned via MemoryError)
         out = bytearray(len(blocks) * 256)
