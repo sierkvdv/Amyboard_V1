@@ -27,7 +27,7 @@ import micropython
 import midi
 import tulip
 
-VERSION = 'v0.15'
+VERSION = 'v0.15.1'
 WASH_OSC = 100
 LFO_OSC = 101
 CHOP_OSCS = (110, 111, 112)
@@ -57,6 +57,10 @@ def setup_audio():
     amy.chorus(0.6, 320, 0.25, 0.7)
     amy.echo(0.5, 500, 1000, 0.6, 0.5)
     amy.reverb(0.8, 0.97, 0.4, 3000)
+    # 150 ms release on the chop voices: timed note-offs FADE instead of
+    # cutting hard (a hard vel=0 mid-waveform crackles — ear-proven A/B)
+    for osc in CHOP_OSCS:
+        amy.send(osc=osc, bp0='0,1.0,150,0')
 
 
 try:
@@ -408,7 +412,8 @@ def _beat_engine():
             osc = CHOP_OSCS[_osc_rot % 3]
             amy.send(osc=osc, wave=amy.PCM,
                      preset=REV_PRESET if rev else CATCH_PRESET,
-                     note=n, vel=vel, amp={'const': 3.5})
+                     note=n, vel=vel,
+                     amp={'const': 3.5, 'vel': 1, 'eg0': 1})
             if _density <= 8:
                 # calm = a short tick, the echo/reverb do the fading;
                 # further open = longer fragments; 9+ rings out in full
@@ -604,7 +609,8 @@ def _service(_arg):
                 _cuts = [c for c in _cuts if c[0] != osc]  # pads ring full
                 amy.send(osc=osc, wave=amy.PCM,
                          preset=CATCH_PRESET, note=n,
-                         vel=0.4 + 0.6 * v / 127.0, amp={'const': 3.5})
+                         vel=0.4 + 0.6 * v / 127.0,
+                         amp={'const': 3.5, 'vel': 1, 'eg0': 1})
         now = time.ticks_ms()
 
         # timed note-offs: keep machine hits short at low STORM values
