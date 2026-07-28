@@ -197,8 +197,12 @@ def _finish_catch():
 def chaos():
     """(Re)roll the pattern: _density hits over 8 eighth-note slots.
     Pitches follow the BeatStep melody when we have one (with octave
-    jumps for drama); otherwise random +/-15 semitones around 60."""
+    jumps for drama); otherwise random +/-15 semitones around 60.
+    Density 0 = machine layer off (knob fully left)."""
     global _pattern
+    if _density <= 0:
+        _pattern = []
+        return
     pat = []
     for i in range(_density):
         slot = random.randrange(0, 8)
@@ -423,9 +427,12 @@ def _service(_arg):
                 if pos != _enc_pos:
                     delta = pos - _enc_pos
                     _enc_pos = pos
-                    _density = max(2, min(12, _density + delta))
+                    _density = max(0, min(12, _density + delta))
                     if _have_sample:
                         chaos()
+                        if _density <= 0:
+                            for osc in CHOP_OSCS:
+                                amy.send(osc=osc, vel=0)
                 pressed = _enc.button(0)
                 if pressed and not _btn_down:
                     start_catch(4)
@@ -488,7 +495,7 @@ def _service(_arg):
         if _rec_until:
             tag_txt = 'REC'
         elif _have_sample:
-            tag_txt = '*%d' % _density
+            tag_txt = '*-' if _density <= 0 else '*%d' % _density
         else:
             tag_txt = '--'
         if _ext_active:
