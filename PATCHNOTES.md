@@ -90,3 +90,4 @@
 - Implementatie zonder float-rekenwerk per frame: vaste 16-punts cirkeltabel (`_CIRC`), geen math-import nodig.
 - Board-verificatie: alle vijf takken (STORM 6, STORM 12, ECHO 0, GALM 9, ADEM 7) live gerenderd op het scherm, errors bleef 0, defaults teruggezet.
 - **Patchkaart volledig geherstyled** als boutique-merk (Error Instruments-energie): WM-1 wordmark met flikkerende bliksem, sticker-badges, faceplate met schroeven, knop-menu-diagram met zonebar, OLED-mock-schermregels, serienummer-strip met barcode. Zelfde Artifact-URL, print-stylesheet behouden. README + PATCHNOTES bij t/m v0.13.
+- **v0.13.1**: knop op halve snelheid (Sierk: "gaat te snel, minimaal 2x zo langzaam") — 2 detents = 1 stap, rest wordt onthouden dus geen verloren klikjes; opname-gebaar daarop afgestemd (4 halve stappen ≈ 8 detents doordraaien); klik reset de rest-teller.

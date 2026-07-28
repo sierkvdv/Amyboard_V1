@@ -20,7 +20,7 @@ import micropython
 import midi
 import tulip
 
-VERSION = 'v0.13'
+VERSION = 'v0.13.1'
 WASH_OSC = 100
 LFO_OSC = 101
 CHOP_OSCS = (110, 111, 112)
@@ -102,8 +102,9 @@ _menu_flash = 0       # ticks_ms deadline: show "ITEM value" in status bar
 _echo_lvl = 5         # 0..10 -> amy.echo level 0.0..1.0 (0 = dry)
 _verb_lvl = 8         # 0..10 -> amy.reverb level 0.0..1.0 (0 = dry)
 _breath = 4           # 0..10 -> filter LFO mod depth 0.0..1.0 (0 = still)
-_rewind = 0           # extra left-detents past the bottom (re-record gesture)
+_rewind = 0           # extra left-steps past the bottom (re-record gesture)
 _rewind_t = 0
+_enc_accum = 0        # raw detents; 2 raw detents = 1 value step (half speed)
 
 
 def _input_peak():
@@ -531,7 +532,7 @@ def _service(_arg):
     global _auto_armed, _last_reroll_tick, _enc_pos, _btn_down, _density
     global _running, _transport_evt, _svc_pending, _osc_rot, _hit_flash
     global _menu, _menu_flash, _echo_lvl, _verb_lvl, _breath
-    global _rewind, _rewind_t
+    global _rewind, _rewind_t, _enc_accum
     _svc_pending = False
     try:
         # live fire: every incoming note plays the caught sample at that
@@ -596,10 +597,19 @@ def _service(_arg):
         if _has_enc and _frame % 2 == 0:
             try:
                 pos = _enc.read(0)
+                delta = 0
                 if pos != _enc_pos:
-                    delta = pos - _enc_pos
+                    # half speed: 2 raw detents = 1 step (remainder kept,
+                    # so nothing is lost between passes)
+                    _enc_accum += pos - _enc_pos
                     _enc_pos = pos
                     _menu_flash = time.ticks_add(now, 2000)
+                    if _enc_accum >= 2:
+                        delta = _enc_accum // 2
+                    elif _enc_accum <= -2:
+                        delta = -((-_enc_accum) // 2)
+                    _enc_accum -= delta * 2
+                if delta:
                     if _menu == 0:
                         at_min = _density <= 0
                         _density = max(0, min(12, _density + delta))
@@ -627,7 +637,8 @@ def _service(_arg):
                             _rewind = 0
                         _rewind += -delta
                         _rewind_t = now
-                        if _rewind >= 6:
+                        # 4 half-speed steps = ~8 raw detents of turning
+                        if _rewind >= 4:
                             _rewind = 0
                             start_catch(4)
                     else:
@@ -637,6 +648,7 @@ def _service(_arg):
                     _menu = (_menu + 1) % len(MENU_ITEMS)
                     _menu_flash = time.ticks_add(now, 2000)
                     _rewind = 0
+                    _enc_accum = 0
                 _btn_down = pressed
             except Exception:
                 pass
