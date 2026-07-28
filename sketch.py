@@ -33,12 +33,11 @@ import micropython
 import midi
 import tulip
 
-VERSION = 'v0.16.2'
+VERSION = 'v0.16.3'
 WASH_OSC = 100
 LFO_OSC = 101
-CHOP_OSCS = (110, 111, 112, 113, 114)  # 5 voices: fewer steal-clicks
-                                       # (a stolen voice restarts the
-                                       # PCM mid-wave = tick)
+CHOP_OSCS = (110, 111, 112)  # 3 voices — 5 overloaded the audio render
+                             # under full load (crackle), reverted
 CATCH_PRESET = 40  # LOW preset slot! 1024 (per docs) is an invalid
                    # recording slot on fw 2026-07-26 — records vanish.
 REV_PRESET = 41    # Python-built reversed copy (1 s, mono 22.05 kHz)
@@ -127,6 +126,7 @@ _breath = 4           # 0..10 -> filter LFO: deeper AND faster breathing
 _rewind = 0           # extra left-steps past the bottom (re-record gesture)
 _rewind_t = 0
 _enc_accum = 0        # raw detents; 2 raw detents = 1 value step (half speed)
+_pass = 0             # service pass counter (30 ms each)
 
 
 def _input_peak():
@@ -646,8 +646,9 @@ def _service(_arg):
     global _auto_armed, _last_reroll_tick, _enc_pos, _btn_down, _density
     global _running, _transport_evt, _svc_pending, _osc_rot, _hit_flash
     global _menu, _menu_flash, _tone_lvl, _echo_lvl, _verb_lvl, _breath
-    global _rewind, _rewind_t, _enc_accum, _cuts
+    global _rewind, _rewind_t, _enc_accum, _cuts, _pass
     _svc_pending = False
+    _pass += 1
     try:
         # live fire: every incoming note plays the caught sample at that
         # pitch immediately — transport state irrelevant (solo on pause!)
@@ -724,9 +725,10 @@ def _service(_arg):
 
         # encoder: click = next menu item, turn = value of that item,
         # keep turning left past the bottom = fresh catch (re-record).
-        # Polled EVERY pass (30 ms): the old render-gated poll (~320 ms)
-        # bundled fast turns into multi-step bursts — felt twitchy.
-        if _has_enc:
+        # Polled every 2nd pass (~60 ms): fine enough to feel smooth
+        # (the old render-gated ~320 ms poll bundled turns into bursts),
+        # gentle enough on the I2C bus to leave the audio task alone.
+        if _has_enc and _pass % 2 == 0:
             try:
                 pos = _enc.read(0)
                 delta = 0
