@@ -15,9 +15,10 @@ import time
 
 import amy
 import amyboard
+import midi
 import tulip
 
-VERSION = 'v0.7'
+VERSION = 'v0.8'
 WASH_OSC = 100
 LFO_OSC = 101
 CHOP_OSCS = (110, 111, 112)
@@ -132,6 +133,37 @@ LFO_SYNTH = 5      # synth rendered straight onto CV1 out (weather LFO)
 _gate_state = False
 _lfo_ok = False
 
+# ---- MIDI in (BeatStep over TRS): transport + melody following ----
+# NOTE: we deliberately do NOT use external_midi_sync — it freezes the whole
+# sketch when the clock stops (verified 2026-07-28). Tempo comes from the CV
+# pulse follower; MIDI provides start/stop and the pitches for the chops.
+_running = True        # transport: follows BeatStep play/stop once seen
+_transport_evt = 0     # 1 = start received, 2 = stop received (set in cb)
+_melody = []           # last note-ons from the BeatStep (ring of 8)
+_midi_notes = 0        # counters, readable over the REPL for verification
+_midi_transport = 0
+
+
+def _on_midi(m):
+    """MIDI-in callback: keep it tiny — flags and counters only, all real
+    work happens in loop()."""
+    global _transport_evt, _midi_notes, _midi_transport
+    try:
+        b = bytes(m)
+        if b == b'\xfa':
+            _transport_evt = 1
+            _midi_transport += 1
+        elif b == b'\xfc':
+            _transport_evt = 2
+            _midi_transport += 1
+        elif len(b) == 3 and (b[0] & 0xF0) == 0x90 and b[2] > 0:
+            _melody.append(b[1])
+            if len(_melody) > 8:
+                _melody.pop(0)
+            _midi_notes += 1
+    except Exception:
+        pass
+
 
 def start_catch(beats=4):
     """Begin a non-blocking catch; loop() finishes it when time is up."""
@@ -157,13 +189,17 @@ def _finish_catch():
 
 
 def chaos():
-    """(Re)roll the pattern: _density hits over 8 eighth-note slots
-    (a slot may repeat = doubles), pitched +/-15 semitones around 60."""
+    """(Re)roll the pattern: _density hits over 8 eighth-note slots.
+    Pitches follow the BeatStep melody when we have one (with octave
+    jumps for drama); otherwise random +/-15 semitones around 60."""
     global _pattern
     pat = []
     for i in range(_density):
         slot = random.randrange(0, 8)
-        note = 60 + random.randrange(0, 31) - 15
+        if _melody:
+            note = random.choice(_melody) + random.choice((-12, 0, 0, 12))
+        else:
+            note = 60 + random.randrange(0, 31) - 15
         vel = 0.6 + random.randrange(0, 4) / 10.0
         pat.append((slot, note, vel))
     _pattern = pat
@@ -252,7 +288,7 @@ def _beat_engine():
     """Called every loop() pass (ungated): fire pattern hits on eighth
     boundaries derived from the sequencer tick clock."""
     global _last_slot, _osc_rot, _bar_count
-    if not _have_sample or _rec_until or not _pattern:
+    if not _running or not _have_sample or _rec_until or not _pattern:
         return
     slot = (tulip.seq_ticks() // 24) % 8  # eighth note = 24 ticks @ 48 PPQ
     if slot == _last_slot:
@@ -307,6 +343,7 @@ def _draw_bolt():
 def loop(*args):
     global _level, _peak_avg, _flash, _cooldown, _frame, _errors, _last_render
     global _auto_armed, _last_reroll_tick, _enc_pos, _btn_down, _density
+    global _running, _transport_evt
     try:
         now = time.ticks_ms()
 
@@ -314,9 +351,27 @@ def loop(*args):
         if _rec_until and time.ticks_diff(now, _rec_until) >= 0:
             _finish_catch()
 
+        # transport events from the BeatStep (set by the MIDI callback)
+        if _transport_evt:
+            evt = _transport_evt
+            _transport_evt = 0
+            if evt == 1:
+                _running = True
+                try:
+                    amy.send(reset=amy.RESET_TIMEBASE)  # downbeat = his press
+                except Exception:
+                    pass
+                chaos()  # fresh pattern on every start
+            else:
+                _running = False
+                for osc in CHOP_OSCS:
+                    amy.send(osc=osc, vel=0)
+                _gate_tick(1)  # force gate low
+
         # clock-follow + gates + beat engine run on EVERY call
         _clock_follow()
-        _gate_tick((tulip.seq_ticks() // 24) % 8)
+        if _running:
+            _gate_tick((tulip.seq_ticks() // 24) % 8)
         _beat_engine()
 
         if time.ticks_diff(now, _last_render) < FRAME_MS:
@@ -400,6 +455,8 @@ def loop(*args):
             weather = 'rain'
         else:
             weather = 'STORM'
+        if not _running:
+            weather = 'PAUZE'
         if _rec_until:
             tag_txt = 'REC'
         elif _have_sample:
@@ -421,6 +478,11 @@ def loop(*args):
 
 
 setup_weather_lfo()
+
+try:
+    midi.add_callback(_on_midi)
+except Exception as e:
+    print('midi callback failed:', e)
 
 # initial face + boot marker
 try:
