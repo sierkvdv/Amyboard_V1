@@ -81,3 +81,12 @@
 - **Opnieuw opnemen = doordraai-gebaar**: als de waarde al op de bodem staat en je blijft naar links draaien (6 extra klikjes binnen ~1,5 s), start een verse vangst. Scherm toont `REC? <<<` als voortgang; loslaten = gebaar vervalt. Klik neemt dus níet meer op.
 - Effect-calls zijn exact dezelfde als in setup_audio() (amy.echo/amy.reverb/filter_freq-mod), alleen het level verandert — geen nieuwe API's verzonnen.
 - Board-verificatie: v0.12 boot schoon (errors 0, frames lopen), alle drie _apply_fx-calls draaien zonder fout terwijl de machine doorloopt. Oor-test Sierk: staat open (klik 1× → ECHO, draai naar 0, hoor 'm droog worden).
+
+## 2026-07-28 (middag) — v0.13: knop-feedback op het scherm (het zonnetje) ✅
+
+- Sierks verzoek: "als je aan het knopje draait moet dit ook visuele weergave... zonnetje die draait ofzo en minder fel wordt, verzin iets leuks."
+- **Positiebalk** verschijnt 2 s bij elke draai: rail met cursor, spookzone (STORM 5-8) als grijs blok gemarkeerd, `<` links van de balk = doordraaien-is-opnemen-hint.
+- **Weer-icoon per menu-item**: STORM = zonnetje met draaiende stralen dat dooft en stralen verliest naarmate je opendraait (15→3 helderheid, 8→2 stralen); in de spookzone draait het **achteruit** met `<<`-tekens ernaast; vanaf 9 draait het dubbel zo snel. ECHO = wegstervende blokjes (0 = "dry"). GALM = uitdijende ringen. ADEM = ademend vierkant (integer-driehoeksgolf, ademdiepte = knopwaarde).
+- Implementatie zonder float-rekenwerk per frame: vaste 16-punts cirkeltabel (`_CIRC`), geen math-import nodig.
+- Board-verificatie: alle vijf takken (STORM 6, STORM 12, ECHO 0, GALM 9, ADEM 7) live gerenderd op het scherm, errors bleef 0, defaults teruggezet.
+- **Patchkaart volledig geherstyled** als boutique-merk (Error Instruments-energie): WM-1 wordmark met flikkerende bliksem, sticker-badges, faceplate met schroeven, knop-menu-diagram met zonebar, OLED-mock-schermregels, serienummer-strip met barcode. Zelfde Artifact-URL, print-stylesheet behouden. README + PATCHNOTES bij t/m v0.13.

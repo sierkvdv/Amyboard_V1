@@ -1,10 +1,11 @@
-# WEERMACHINE v0.12 — resident sketch: WASH + weather display + STORMVANGER.
-# New in v0.12:
-#  - encoder CLICK steps through a 4-item menu: STORM (density) / ECHO /
-#    GALM (reverb) / ADEM (filter breathing depth); TURN sets the value
-#  - effects are finally playable: ECHO and GALM go all the way to dry (0)
-#  - re-record gesture: keep turning LEFT past the bottom for a moment
-#    (a few extra detents) -> fresh catch. Click no longer records.
+# WEERMACHINE v0.13 — resident sketch: WASH + weather display + STORMVANGER.
+# New in v0.13:
+#  - knob feedback on screen while turning: a position bar (ghost zone
+#    marked, '<' at the left = keep going to re-record) plus a weather
+#    icon per menu item — the STORM sun spins and dims as you open up,
+#    spins BACKWARDS inside the reverse zone (5..8)
+# v0.12: encoder CLICK steps a 4-item menu (STORM/ECHO/GALM/ADEM),
+#    TURN sets the value, turning left past the bottom = fresh catch.
 # Recovery: hold BOOT while powering on to skip this sketch.
 
 import random
@@ -19,7 +20,7 @@ import micropython
 import midi
 import tulip
 
-VERSION = 'v0.12'
+VERSION = 'v0.13'
 WASH_OSC = 100
 LFO_OSC = 101
 CHOP_OSCS = (110, 111, 112)
@@ -439,6 +440,85 @@ def _draw_bolt():
             x = 122
 
 
+# 16 points on a radius-10 circle (22.5 deg steps), integers only —
+# no float math per frame, and no math-module dependency
+_CIRC = ((10, 0), (9, 4), (7, 7), (4, 9), (0, 10), (-4, 9), (-7, 7),
+         (-9, 4), (-10, 0), (-9, -4), (-7, -7), (-4, -9), (0, -10),
+         (4, -9), (7, -7), (9, -4))
+
+
+def _draw_knob():
+    """Knob feedback while the menu flash is live: a position bar with
+    the ghost zone marked ('<' at the left = keep turning to re-record)
+    plus a weather icon per item. The STORM sun spins and dims as the
+    storm grows, and spins backwards inside the reverse zone."""
+    if _menu == 0:
+        val, vmax = _density, 12
+    elif _menu == 1:
+        val, vmax = _echo_lvl, 10
+    elif _menu == 2:
+        val, vmax = _verb_lvl, 10
+    else:
+        val, vmax = _breath, 10
+    x0, w, by = 14, 100, 90
+    _d.fill_rect(x0, by + 5, w, 2, 6)          # the rail
+    _d.text('<', 2, by, 7)                     # past the left edge = REC
+    if _menu == 0:
+        _d.fill_rect(x0 + w * 5 // 12, by + 2, w * 3 // 12, 8, 4)  # 5..8
+    px = x0 + w * val // vmax
+    _d.fill_rect(px - 1, by - 1, 4, 13, 15)    # cursor
+    cx, cy = 64, 48
+    if _menu == 0:
+        # the sun: fewer rays + dimmer + smaller as the storm grows
+        bright = 15 - val
+        if bright < 3:
+            bright = 3
+        rays = 8 - val // 2
+        core = 4 if val < 7 else 3
+        _d.fill_rect(cx - core, cy - core, core * 2, core * 2, bright)
+        rev = 5 <= val <= 8
+        base = (-_frame if rev else _frame) * (2 if val >= 9 else 1)
+        for i in range(rays):
+            dx, dy = _CIRC[(base + i * 16 // rays) % 16]
+            _d.fill_rect(cx + dx - 1, cy + dy - 1, 2, 2, bright)
+        if rev:
+            _d.text('<<', cx - 34, cy - 4, 11)
+            _d.text('<<', cx + 18, cy - 4, 11)
+    elif _menu == 1:
+        # echo taps: repeating squares, shrinking and fading
+        b = 15
+        ex = cx - 26
+        for i in range(1 + min(4, val // 2)):
+            s = 9 - i
+            _d.fill_rect(ex, cy - s // 2, s, s, b)
+            ex += s + 5
+            if b > 6:
+                b -= 3
+        if val == 0:
+            _d.text('dry', cx + 10, cy - 4, 8)
+    elif _menu == 2:
+        # reverb: expanding rings around a core
+        _d.fill_rect(cx - 2, cy - 2, 4, 4, 13)
+        for i in range(min(4, (val + 2) // 3)):
+            r = 6 + i * 6
+            c = 11 - i * 2
+            _d.hline(cx - r, cy - r, r * 2, c)
+            _d.hline(cx - r, cy + r, r * 2, c)
+            _d.vline(cx - r, cy - r, r * 2, c)
+            _d.vline(cx + r, cy - r, r * 2 + 1, c)
+        if val == 0:
+            _d.text('dry', cx + 10, cy - 4, 8)
+    else:
+        # breathing filter: a square that inhales/exhales, depth = value
+        ph = _frame % 12
+        tri = ph if ph < 6 else 12 - ph        # integer triangle wave 0..6
+        s = 3 + tri * val // 8
+        _d.hline(cx - s, cy - s, s * 2, 12)
+        _d.hline(cx - s, cy + s, s * 2, 12)
+        _d.vline(cx - s, cy - s, s * 2, 12)
+        _d.vline(cx + s, cy - s, s * 2 + 1, 12)
+
+
 def loop(*args):
     # Deliberately empty. The factory loop() starves whenever external MIDI
     # clock flows in (verified 2026-07-28: F8 stream -> zero loop calls), so
@@ -601,6 +681,10 @@ def _service(_arg):
         if _hit_flash:  # visual feedback for live-fired notes
             _d.fill_rect(0, 108, 128, 3, 15)
             _hit_flash -= 1
+
+        # knob feedback: bar + weather icon, while the menu flash lives
+        if time.ticks_diff(_menu_flash, now) > 0 and not _rec_until:
+            _draw_knob()
 
         # status bar
         if _level < 0.06:

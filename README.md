@@ -9,7 +9,7 @@ rainstorm that reacts to the sound.
 Comments and identifiers are English; the patch card and session notes are Dutch
 (the instrument's owner is).
 
-## What it does right now (sketch v0.12)
+## What it does right now (sketch v0.13)
 
 | Layer | Behaviour |
 |---|---|
@@ -20,7 +20,7 @@ Comments and identifiers are English; the patch card and session notes are Dutch
 | **Weather display** | Rain density follows input loudness; lightning strikes on transients; status bar shows condition, tempo and catch state. |
 | **Clock follow** | Reads BeatStep Pro CLOCK OUT pulses on CV1 in and steers the sequencer tempo (`CLK` on screen). Falls back to 120 BPM after 2.5 s of silence. |
 | **CV outputs** | CV2 out = 5 V gate square on quarter notes at the followed tempo. CV1 out = slow weather LFO for filter modulation. |
-| **Encoder** | Click steps a 4-item menu: `STORM` (density 0–12: 0 = machine layer off, middle = reverse zone, high = dense chaos) · `ECHO` (0–10, 0 = dry) · `GALM` (reverb 0–10, 0 = dry) · `ADEM` (filter-breathing depth 0–10, 0 = still). Turn sets the value of the current item. Keep turning left past the bottom for a moment (`REC? <<<` on screen) = fresh catch. |
+| **Encoder** | Click steps a 4-item menu: `STORM` (density 0–12: 0 = machine layer off, middle = reverse zone, high = dense chaos) · `ECHO` (0–10, 0 = dry) · `GALM` (reverb 0–10, 0 = dry) · `ADEM` (filter-breathing depth 0–10, 0 = still). Turn sets the value of the current item. Keep turning left past the bottom for a moment (`REC? <<<` on screen) = fresh catch. While turning, the screen shows a position bar (ghost zone marked) plus a weather icon: the STORM sun spins and dims as you open up, and spins backwards inside the reverse zone. |
 
 Architecture note: everything runs from a `_thread` background heartbeat (30 ms)
 that `micropython.schedule()`s the service routine; the factory `loop()` hook is
