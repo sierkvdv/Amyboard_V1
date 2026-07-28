@@ -1,5 +1,9 @@
-# WEERMACHINE v0.13 — resident sketch: WASH + weather display + STORMVANGER.
-# New in v0.13:
+# WEERMACHINE v0.14 — resident sketch: WASH + weather display + STORMVANGER.
+# New in v0.14:
+#  - hit length follows the STORM knob: calm = short ticks (~125 ms)
+#    that die out in the echo/reverb, further open = longer fragments,
+#    9+ = the sample rings out in full. Live pad hits stay full length.
+# v0.13:
 #  - knob feedback on screen while turning: a position bar (ghost zone
 #    marked, '<' at the left = keep going to re-record) plus a weather
 #    icon per menu item — the STORM sun spins and dims as you open up,
@@ -20,7 +24,7 @@ import micropython
 import midi
 import tulip
 
-VERSION = 'v0.13.1'
+VERSION = 'v0.14'
 WASH_OSC = 100
 LFO_OSC = 101
 CHOP_OSCS = (110, 111, 112)
@@ -131,6 +135,8 @@ _pattern = []      # list of (slot 0..7, note, vel)
 _last_slot = -1
 _osc_rot = 0
 _bar_count = 0
+_cuts = []         # (osc, deadline_ms): timed note-offs that keep machine
+                   # hits short at low density (the effects do the fading)
 
 # ---- external clock follow (BeatStep Pro CLOCK OUT -> CV1 in) ----
 # Assumes 1 pulse per 16th note (BSP default). We burst-sample the CV
@@ -380,6 +386,7 @@ def _beat_engine():
         rb = 4 if _density <= 4 else (2 if _density <= 8 else 1)
         if _bar_count % rb == 0:
             chaos()
+    global _cuts
     for sl, note, vel, rev in _pattern:
         if sl == slot:
             n = note
@@ -387,14 +394,22 @@ def _beat_engine():
                 n += random.choice((-7, -5, 5, 7))  # stray gust
             n += random.randrange(-15, 16) / 100.0  # weather micro-drift
             _osc_rot += 1
-            amy.send(osc=CHOP_OSCS[_osc_rot % 3], wave=amy.PCM,
+            osc = CHOP_OSCS[_osc_rot % 3]
+            amy.send(osc=osc, wave=amy.PCM,
                      preset=REV_PRESET if rev else CATCH_PRESET,
                      note=n, vel=vel, amp={'const': 3.5})
+            if _density <= 8:
+                # calm = a short tick, the echo/reverb do the fading;
+                # further open = longer fragments; 9+ rings out in full
+                _cuts = [c for c in _cuts if c[0] != osc]
+                _cuts.append((osc, time.ticks_add(
+                    time.ticks_ms(), 80 + _density * 45)))
 
 
 def stilte():
-    global _pattern
+    global _pattern, _cuts
     _pattern = []
+    _cuts = []
     for osc in CHOP_OSCS:
         amy.send(osc=osc, vel=0)
 
@@ -532,7 +547,7 @@ def _service(_arg):
     global _auto_armed, _last_reroll_tick, _enc_pos, _btn_down, _density
     global _running, _transport_evt, _svc_pending, _osc_rot, _hit_flash
     global _menu, _menu_flash, _echo_lvl, _verb_lvl, _breath
-    global _rewind, _rewind_t, _enc_accum
+    global _rewind, _rewind_t, _enc_accum, _cuts
     _svc_pending = False
     try:
         # live fire: every incoming note plays the caught sample at that
@@ -542,10 +557,22 @@ def _service(_arg):
             _hit_flash = 2  # always show reception, even before a catch
             if _have_sample and not _rec_until:
                 _osc_rot += 1
-                amy.send(osc=CHOP_OSCS[_osc_rot % 3], wave=amy.PCM,
+                osc = CHOP_OSCS[_osc_rot % 3]
+                _cuts = [c for c in _cuts if c[0] != osc]  # pads ring full
+                amy.send(osc=osc, wave=amy.PCM,
                          preset=CATCH_PRESET, note=n,
                          vel=0.4 + 0.6 * v / 127.0, amp={'const': 3.5})
         now = time.ticks_ms()
+
+        # timed note-offs: keep machine hits short at low STORM values
+        if _cuts:
+            left = []
+            for o, t in _cuts:
+                if time.ticks_diff(now, t) >= 0:
+                    amy.send(osc=o, vel=0)
+                else:
+                    left.append((o, t))
+            _cuts = left
 
         # finish a running catch as soon as its window has passed
         if _rec_until and time.ticks_diff(now, _rec_until) >= 0:
