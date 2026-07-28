@@ -1,7 +1,10 @@
-# WEERMACHINE v0.16.2 — resident sketch: WASH + weather display + STORMVANGER.
-# v0.16.1/2: encoder polled every 30 ms pass (render-gated polling
-#    bundled turns into twitchy bursts); 5 chop voices instead of 3
-#    (voice stealing restarts the PCM mid-wave = tick).
+# WEERMACHINE v0.17 — resident sketch: WASH + weather display + STORMVANGER.
+# v0.17 HEADROOM: measured input peaks ~20k/32k; wash gain x6 and hit
+#    amp 3.5 were slamming 2-4x OVER full scale — that hard digital
+#    clipping was "the crackle when music plays". Wash 1.5, hits 1.4:
+#    just under full scale at the measured level. Turn the MIXER up
+#    for loudness, never these constants.
+# v0.16.x: hold-to-play pads; encoder burst clamp, poll ~300 ms.
 # v0.16:
 #  - pads behave like keys: the sample sounds WHILE held and fades on
 #    release (note-off). Machine hits unaffected.
@@ -33,7 +36,7 @@ import micropython
 import midi
 import tulip
 
-VERSION = 'v0.16.3'
+VERSION = 'v0.17'
 WASH_OSC = 100
 LFO_OSC = 101
 CHOP_OSCS = (110, 111, 112)  # 3 voices — 5 overloaded the audio render
@@ -55,7 +58,10 @@ def setup_audio():
     amy.send(sequencer_run=1)  # reset can leave the transport paused
     amy.reset()
     amy.send(tempo=120)
-    amy.send(osc=WASH_OSC, wave=amy.AUDIO_IN0, vel=1, amp={'const': 6.0})
+    # gain 1.5, NOT 6: measured input peaks at ~20k/32k (2026-07-28),
+    # so x6 slammed 3.7x over full scale = the "crackle when music
+    # plays". 20k x 1.5 = 30k, loud but clean.
+    amy.send(osc=WASH_OSC, wave=amy.AUDIO_IN0, vel=1, amp={'const': 1.5})
     amy.send(osc=LFO_OSC, wave=amy.SINE, freq=0.05, amp=1)
     amy.send(osc=WASH_OSC, mod_source=LFO_OSC,
              filter_type=amy.FILTER_LPF24,
@@ -451,7 +457,7 @@ def _beat_engine():
             amy.send(osc=osc, wave=amy.PCM,
                      preset=REV_PRESET if rev else CATCH_PRESET,
                      note=n, vel=vel,
-                     amp={'const': 3.5, 'vel': 1, 'eg0': 1})
+                     amp={'const': 1.4, 'vel': 1, 'eg0': 1})
             # every hit fades out BEFORE the recording's abrupt end (the
             # raw end mid-waveform clicks). Playback speed scales with
             # pitch, so the window shrinks for high hits.
@@ -663,7 +669,7 @@ def _service(_arg):
                 amy.send(osc=osc, wave=amy.PCM,
                          preset=CATCH_PRESET, note=n,
                          vel=0.4 + 0.6 * v / 127.0,
-                         amp={'const': 3.5, 'vel': 1, 'eg0': 1})
+                         amp={'const': 1.4, 'vel': 1, 'eg0': 1})
                 _live.append((n, osc))
                 # safety net: even a held pad fades before the
                 # recording's clicky end (pitch-aware window) — the
@@ -725,10 +731,11 @@ def _service(_arg):
 
         # encoder: click = next menu item, turn = value of that item,
         # keep turning left past the bottom = fresh catch (re-record).
-        # Polled every 2nd pass (~60 ms): fine enough to feel smooth
-        # (the old render-gated ~320 ms poll bundled turns into bursts),
-        # gentle enough on the I2C bus to leave the audio task alone.
-        if _has_enc and _pass % 2 == 0:
+        # Polled every ~300 ms — the exact cadence that was audio-clean
+        # for days. Faster I2C polling (30/60 ms) coincided with output
+        # crackle, so we stay conservative; the burst clamp (max 2 steps
+        # per poll) keeps the knob from feeling twitchy anyway.
+        if _has_enc and _pass % 10 == 0:
             try:
                 pos = _enc.read(0)
                 delta = 0
