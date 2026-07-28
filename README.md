@@ -9,18 +9,18 @@ rainstorm that reacts to the sound.
 Comments and identifiers are English; the patch card and session notes are Dutch
 (the instrument's owner is).
 
-## What it does right now (sketch v0.13)
+## What it does right now (sketch v0.15)
 
 | Layer | Behaviour |
 |---|---|
 | **Wash** | Line-in audio runs through AMY as an oscillator: breathing 24 dB lowpass (0.05 Hz LFO), chorus, tempo-synced echo, big reverb. |
-| **Stormvanger** (catcher) | Records ~2 s of line-in into sample RAM — plus a reversed 22.05 kHz copy of the last second — then fires pitched chops on eighth-note boundaries. Pitch palette follows the notes you played (melody buffer), widens with density, and every hit gets ±15 cent micro-drift. Keeps playing when the input stops. |
+| **Stormvanger** (catcher) | Records ~2 s of line-in into sample RAM — plus a reversed 22.05 kHz copy of the last second — then fires pitched chops on eighth-note boundaries. Pitch palette follows the notes you played (melody buffer), widens with density, and every hit gets ±15 cent micro-drift. Hit length follows the knob: calm = ~125 ms ticks fading in the echo/reverb, open = longer fragments, 9+ = full ring-out. Keeps playing when the input stops. |
 | **Reverse ghosts** | In the middle knob zone (density 5–8) ~35% of hits play the reversed copy. Outside that zone everything plays forward. |
 | **MIDI in (TRS)** | BeatStep play/stop = transport (play re-anchors the downbeat). Every incoming note on any channel fires the caught sample at that pitch immediately, velocity-sensitive, even while paused (solo mode). A white flash strip confirms receipt. MIDI clock (F8) drives the sequencer ticks in lock-step. |
 | **Weather display** | Rain density follows input loudness; lightning strikes on transients; status bar shows condition, tempo and catch state. |
 | **Clock follow** | Reads BeatStep Pro CLOCK OUT pulses on CV1 in and steers the sequencer tempo (`CLK` on screen). Falls back to 120 BPM after 2.5 s of silence. |
 | **CV outputs** | CV2 out = 5 V gate square on quarter notes at the followed tempo. CV1 out = slow weather LFO for filter modulation. |
-| **Encoder** | Click steps a 4-item menu: `STORM` (density 0–12: 0 = machine layer off, middle = reverse zone, high = dense chaos) · `ECHO` (0–10, 0 = dry) · `GALM` (reverb 0–10, 0 = dry) · `ADEM` (filter-breathing depth 0–10, 0 = still). Turn sets the value of the current item. Keep turning left past the bottom for a moment (`REC? <<<` on screen) = fresh catch. While turning, the screen shows a position bar (ghost zone marked) plus a weather icon: the STORM sun spins and dims as you open up, and spins backwards inside the reverse zone. |
+| **Encoder** | Click steps a 5-item menu: `STORM` (density 0–12: 0 = machine layer off, middle = reverse zone, high = dense chaos) · `TONEN` (pitch wander 0–10: the whole pattern transposes per bar, up to ±1 octave) · `ECHO` (0–10, 0 = dry) · `GALM` (reverb 0–10, 0 = dry) · `ADEM` (filter breathing 0–10: deeper AND faster as you open up). Turn sets the value; 2 detents = 1 step. Keep turning left past the bottom for a moment (`REC? <<<` on screen) = fresh catch. While turning, the screen shows a big menu box (name, value, position dots), a position bar (ghost zone marked) and a weather icon per item — the STORM sun spins and dims as you open up, backwards inside the reverse zone. |
 
 Architecture note: everything runs from a `_thread` background heartbeat (30 ms)
 that `micropython.schedule()`s the service routine; the factory `loop()` hook is

@@ -1,8 +1,11 @@
-# WEERMACHINE v0.14 — resident sketch: WASH + weather display + STORMVANGER.
-# New in v0.14:
-#  - hit length follows the STORM knob: calm = short ticks (~125 ms)
-#    that die out in the echo/reverb, further open = longer fragments,
-#    9+ = the sample rings out in full. Live pad hits stay full length.
+# WEERMACHINE v0.15 — resident sketch: WASH + weather display + STORMVANGER.
+# New in v0.15:
+#  - TONEN menu item: the beats wander in pitch per bar — 0 sticks to
+#    your melody, 10 jumps wildly (up to +/- an octave)
+#  - big menu box on screen (name + value + position dots): clicking
+#    through the menu is unmissable now
+#  - ADEM is audible: breathing gets FASTER as well as deeper
+# v0.14: hit length follows STORM (calm = short ticks, 9+ = full ring)
 # v0.13:
 #  - knob feedback on screen while turning: a position bar (ghost zone
 #    marked, '<' at the left = keep going to re-record) plus a weather
@@ -24,7 +27,7 @@ import micropython
 import midi
 import tulip
 
-VERSION = 'v0.14'
+VERSION = 'v0.15'
 WASH_OSC = 100
 LFO_OSC = 101
 CHOP_OSCS = (110, 111, 112)
@@ -100,12 +103,14 @@ _enc_pos = 0
 _btn_down = False
 
 # ---- encoder menu (v0.12): click steps items, turn sets the value ----
-MENU_ITEMS = ('STORM', 'ECHO', 'GALM', 'ADEM')
+MENU_ITEMS = ('STORM', 'TONEN', 'ECHO', 'GALM', 'ADEM')
 _menu = 0             # index into MENU_ITEMS; STORM = the density knob
 _menu_flash = 0       # ticks_ms deadline: show "ITEM value" in status bar
+_tone_lvl = 3         # 0..10 pitch wander: per-bar transpose of the beats
+_bar_shift = 0        # current bar's transpose, rolled by the beat engine
 _echo_lvl = 5         # 0..10 -> amy.echo level 0.0..1.0 (0 = dry)
 _verb_lvl = 8         # 0..10 -> amy.reverb level 0.0..1.0 (0 = dry)
-_breath = 4           # 0..10 -> filter LFO mod depth 0.0..1.0 (0 = still)
+_breath = 4           # 0..10 -> filter LFO: deeper AND faster breathing
 _rewind = 0           # extra left-steps past the bottom (re-record gesture)
 _rewind_t = 0
 _enc_accum = 0        # raw detents; 2 raw detents = 1 value step (half speed)
@@ -379,6 +384,7 @@ def _beat_engine():
     slot = (tulip.seq_ticks() // 24) % 8  # eighth note = 24 ticks @ 48 PPQ
     if slot == _last_slot:
         return
+    global _bar_shift
     _last_slot = slot
     if slot == 0:
         _bar_count += 1
@@ -386,10 +392,15 @@ def _beat_engine():
         rb = 4 if _density <= 4 else (2 if _density <= 8 else 1)
         if _bar_count % rb == 0:
             chaos()
+        # TONEN: every bar the whole pattern wanders in pitch — palette
+        # widens with the knob (0 = stay put, 10 = up to an octave away)
+        pal = ((0,), (0, 0, 2, -2), (0, 2, -2, 5, -5),
+               (0, 3, -3, 5, -5, 7, -7), (0, 4, -4, 7, -7, 12, -12))
+        _bar_shift = random.choice(pal[min(4, (_tone_lvl + 2) // 3)])
     global _cuts
     for sl, note, vel, rev in _pattern:
         if sl == slot:
-            n = note
+            n = note + _bar_shift
             if _density >= 5 and random.randrange(0, 8) == 0:
                 n += random.choice((-7, -5, 5, 7))  # stray gust
             n += random.randrange(-15, 16) / 100.0  # weather micro-drift
@@ -416,15 +427,18 @@ def stilte():
 
 def _apply_fx(item):
     """Re-send one effect with its current menu value. Uses the exact same
-    calls as setup_audio(), only the level changes — 0 means dry/still."""
+    calls as setup_audio(), only the level changes — 0 means dry/still.
+    (TONEN needs no call here: the beat engine reads it directly.)"""
     try:
-        if item == 1:
+        if item == 2:
             amy.echo(_echo_lvl / 10.0, 500, 1000, 0.6, 0.5)
-        elif item == 2:
-            amy.reverb(_verb_lvl / 10.0, 0.97, 0.4, 3000)
         elif item == 3:
+            amy.reverb(_verb_lvl / 10.0, 0.97, 0.4, 3000)
+        elif item == 4:
+            # audible breathing: deeper AND faster as you open up
+            amy.send(osc=LFO_OSC, freq=0.05 + _breath * 0.03)
             amy.send(osc=WASH_OSC,
-                     filter_freq={'const': 2600, 'mod': _breath / 10.0})
+                     filter_freq={'const': 2600, 'mod': _breath / 8.0})
     except Exception as e:
         print('fx apply failed:', e)
 
@@ -464,18 +478,35 @@ _CIRC = ((10, 0), (9, 4), (7, 7), (4, 9), (0, 10), (-4, 9), (-7, 7),
 
 
 def _draw_knob():
-    """Knob feedback while the menu flash is live: a position bar with
-    the ghost zone marked ('<' at the left = keep turning to re-record)
-    plus a weather icon per item. The STORM sun spins and dims as the
-    storm grows, and spins backwards inside the reverse zone."""
+    """Knob feedback while the menu flash is live: a big menu box (name,
+    value, position dots — clicking through must be unmissable), a
+    position bar with the ghost zone marked ('<' at the left = keep
+    turning to re-record), and a weather icon per item."""
     if _menu == 0:
         val, vmax = _density, 12
     elif _menu == 1:
-        val, vmax = _echo_lvl, 10
+        val, vmax = _tone_lvl, 10
     elif _menu == 2:
+        val, vmax = _echo_lvl, 10
+    elif _menu == 3:
         val, vmax = _verb_lvl, 10
     else:
         val, vmax = _breath, 10
+    # the menu box
+    _d.fill_rect(20, 16, 88, 36, 1)
+    _d.hline(20, 16, 88, 13)
+    _d.hline(20, 51, 88, 13)
+    _d.vline(20, 16, 36, 13)
+    _d.vline(107, 16, 36, 13)
+    _d.text(MENU_ITEMS[_menu], 28, 22, 15)
+    _d.text('-' if (_menu == 0 and val <= 0) else str(val), 88, 22, 11)
+    for i in range(len(MENU_ITEMS)):
+        x = 30 + i * 14
+        if i == _menu:
+            _d.fill_rect(x, 42, 8, 4, 15)
+        else:
+            _d.fill_rect(x + 2, 43, 3, 2, 6)
+    # the position bar
     x0, w, by = 14, 100, 90
     _d.fill_rect(x0, by + 5, w, 2, 6)          # the rail
     _d.text('<', 2, by, 7)                     # past the left edge = REC
@@ -483,7 +514,8 @@ def _draw_knob():
         _d.fill_rect(x0 + w * 5 // 12, by + 2, w * 3 // 12, 8, 4)  # 5..8
     px = x0 + w * val // vmax
     _d.fill_rect(px - 1, by - 1, 4, 13, 15)    # cursor
-    cx, cy = 64, 48
+    # the icon, between box and bar
+    cx, cy = 64, 71
     if _menu == 0:
         # the sun: fewer rays + dimmer + smaller as the storm grows
         bright = 15 - val
@@ -501,6 +533,17 @@ def _draw_knob():
             _d.text('<<', cx - 34, cy - 4, 11)
             _d.text('<<', cx + 18, cy - 4, 11)
     elif _menu == 1:
+        # wandering tones: three notes hopping, hop height = value
+        for i in range(3):
+            ph = (_frame * (i + 2) // 2 + i * 5) % 12
+            tri = ph if ph < 6 else 12 - ph    # integer triangle wave
+            dy = tri * val // 7
+            x = cx - 22 + i * 17
+            _d.fill_rect(x, cy + 4 - dy, 5, 4, 14 - i * 3)
+            _d.vline(x + 5, cy - 3 - dy, 7, 14 - i * 3)
+        if val == 0:
+            _d.text('vast', cx + 14, cy - 4, 8)
+    elif _menu == 2:
         # echo taps: repeating squares, shrinking and fading
         b = 15
         ex = cx - 26
@@ -512,11 +555,11 @@ def _draw_knob():
                 b -= 3
         if val == 0:
             _d.text('dry', cx + 10, cy - 4, 8)
-    elif _menu == 2:
+    elif _menu == 3:
         # reverb: expanding rings around a core
         _d.fill_rect(cx - 2, cy - 2, 4, 4, 13)
         for i in range(min(4, (val + 2) // 3)):
-            r = 6 + i * 6
+            r = 4 + i * 4
             c = 11 - i * 2
             _d.hline(cx - r, cy - r, r * 2, c)
             _d.hline(cx - r, cy + r, r * 2, c)
@@ -546,7 +589,7 @@ def _service(_arg):
     global _level, _peak_avg, _flash, _cooldown, _frame, _errors, _last_render
     global _auto_armed, _last_reroll_tick, _enc_pos, _btn_down, _density
     global _running, _transport_evt, _svc_pending, _osc_rot, _hit_flash
-    global _menu, _menu_flash, _echo_lvl, _verb_lvl, _breath
+    global _menu, _menu_flash, _tone_lvl, _echo_lvl, _verb_lvl, _breath
     global _rewind, _rewind_t, _enc_accum, _cuts
     _svc_pending = False
     try:
@@ -646,17 +689,20 @@ def _service(_arg):
                                 for osc in CHOP_OSCS:
                                     amy.send(osc=osc, vel=0)
                     elif _menu == 1:
+                        at_min = _tone_lvl <= 0
+                        _tone_lvl = max(0, min(10, _tone_lvl + delta))
+                    elif _menu == 2:
                         at_min = _echo_lvl <= 0
                         _echo_lvl = max(0, min(10, _echo_lvl + delta))
-                        _apply_fx(1)
-                    elif _menu == 2:
+                        _apply_fx(2)
+                    elif _menu == 3:
                         at_min = _verb_lvl <= 0
                         _verb_lvl = max(0, min(10, _verb_lvl + delta))
-                        _apply_fx(2)
+                        _apply_fx(3)
                     else:
                         at_min = _breath <= 0
                         _breath = max(0, min(10, _breath + delta))
-                        _apply_fx(3)
+                        _apply_fx(4)
                     # re-record: extra left-detents while already at the
                     # bottom accumulate; enough of them within ~1.5 s = REC
                     if delta < 0 and at_min:
@@ -755,8 +801,10 @@ def _service(_arg):
             if _menu == 0:
                 val = '-' if _density <= 0 else str(_density)
             elif _menu == 1:
-                val = str(_echo_lvl)
+                val = str(_tone_lvl)
             elif _menu == 2:
+                val = str(_echo_lvl)
+            elif _menu == 3:
                 val = str(_verb_lvl)
             else:
                 val = str(_breath)

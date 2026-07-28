@@ -91,3 +91,12 @@
 - Board-verificatie: alle vijf takken (STORM 6, STORM 12, ECHO 0, GALM 9, ADEM 7) live gerenderd op het scherm, errors bleef 0, defaults teruggezet.
 - **Patchkaart volledig geherstyled** als boutique-merk (Error Instruments-energie): WM-1 wordmark met flikkerende bliksem, sticker-badges, faceplate met schroeven, knop-menu-diagram met zonebar, OLED-mock-schermregels, serienummer-strip met barcode. Zelfde Artifact-URL, print-stylesheet behouden. README + PATCHNOTES bij t/m v0.13.
 - **v0.13.1**: knop op halve snelheid (Sierk: "gaat te snel, minimaal 2x zo langzaam") — 2 detents = 1 stap, rest wordt onthouden dus geen verloren klikjes; opname-gebaar daarop afgestemd (4 halve stappen ≈ 8 detents doordraaien); klik reset de rest-teller.
+
+## 2026-07-28 (namiddag) — v0.14 + v0.15: tikjes, TONEN en een onmisbare menu-box ✅
+
+- **v0.14 — hit-lengte volgt de STORM-knop** (Sierk: "wordt al erg druk als er pas 1 beat wordt aangetikt, hij speelt hele sample af... moet gewoon 1 tikkie doen die uitfadet"): machine-hits krijgen een getimede note-off — calm (1) ≈ 125 ms tikje, verder open = langere flarden (80 + density×45 ms), vanaf 9 klinkt het sample vol uit. De echo/galm verzorgen de uitfade van het tikje. Live pad-noten blijven wél vol klinken (pending cut op een hergebruikte osc wordt geschrapt). Implementatie: `_cuts`-lijst met (osc, deadline), elke service-pass afgehandeld met bewezen `vel=0`-sends — geen envelope-API-gok.
+- **v0.15 — TONEN + grote menu-box** (Sierk: "merk niet super veel verschil... niet zo duidelijk als ik er doorheen klik... schuif toevoegen die wat cools kan, lekker die tonen beetje wisselen"):
+  - Nieuw menu-item **TONEN** (0-10, start 3), tussen STORM en ECHO: elke maat verschuift het hele beat-patroon van toonhoogte — palet groeit met de knop van (0) via ±2/±5 naar ±12 (octaaf). 0 = blijft strak bij je melodie.
+  - **Menu-box** midden op het scherm bij elke klik/draai: itemnaam + waarde + 5 positie-stipjes — je ziet nu onmiskenbaar wáár in het menu je zit. Icoontjes verhuisd naar onder de box; TONEN-icoon = drie huppelende nootjes (spronghoogte = knopwaarde).
+  - **ADEM hoorbaar gemaakt**: ademt nu sneller én dieper naarmate je opendraait (LFO 0,05→0,35 Hz, diepte tot 1,25 octaaf) — voorheen alleen onhoorbaar-traag dieper.
+- Board-verificatie: v0.15 boot schoon, alle 5 menu-widgets gerenderd, fx-calls foutloos, errors 0. Oor-test: STORM op 1-2 zetten (korte tikjes), dan TONEN opendraaien en de beats horen zwerven.

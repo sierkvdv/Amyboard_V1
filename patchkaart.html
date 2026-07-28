@@ -266,7 +266,7 @@
   <p class="tagline"><b>Vangt je muziek. Speelt het terug als weer.</b> Tempo-locked soundscape-instrument op AMYboard — sampelt wat je erin gooit, smeedt er spookbeats van (soms achterstevoren) en laat het op het schermpje stormen.</p>
   <div class="modelline">
     <span class="badge plain">MODEL WM-1 &middot; STORMVANGER</span>
-    <span class="badge hot">SKETCH v0.13</span>
+    <span class="badge hot">SKETCH v0.15</span>
     <span class="badge volt">GEEN PRESETS — ALLEEN WEER</span>
     <span class="badge plain">28 JULI 2026</span>
   </div>
@@ -359,10 +359,12 @@
 
 <section class="knobzone">
   <h2>De knop <span class="accent">// klik = menu, draai = waarde</span></h2>
-  <p class="lead">Eén knop, vier werelden. Elke <b>klik</b> stapt door het menu; <b>draaien</b> zet de waarde van het actieve item. Zodra je draait verschijnt op het scherm een <b>positiebalk</b> (spookzone gemarkeerd, <code>&lt;</code> links = doordraaien is opnieuw opnemen) plus een icoon: bij STORM een <b>zonnetje dat draait en dooft</b> naarmate je opendraait — in de spookzone draait het achteruit. ECHO = wegstervende blokjes, GALM = uitdijende ringen, ADEM = een ademend vierkant.</p>
+  <p class="lead">Eén knop, vijf werelden. Elke <b>klik</b> stapt door het menu; <b>draaien</b> zet de waarde (2 klikjes = 1 stap). Bij elke klik of draai verschijnt een <b>grote menu-box</b> op het scherm — naam, waarde en vijf stipjes zodat je ziet wáár je zit — plus een <b>positiebalk</b> (spookzone gemarkeerd, <code>&lt;</code> links = doordraaien is opnieuw opnemen) en een icoon: het STORM-<b>zonnetje draait en dooft</b> naarmate je opendraait (achteruit in de spookzone), TONEN = huppelende nootjes, ECHO = wegstervende blokjes, GALM = uitdijende ringen, ADEM = een ademend vierkant.</p>
 
   <div class="menucycle">
     <span class="menuchip active">STORM<small>beats &middot; 0–12</small></span>
+    <span class="cyclearrow">→klik→</span>
+    <span class="menuchip">TONEN<small>toon-zwerf &middot; 0–10</small></span>
     <span class="cyclearrow">→klik→</span>
     <span class="menuchip">ECHO<small>galm-tik &middot; 0–10</small></span>
     <span class="cyclearrow">→klik→</span>
@@ -378,9 +380,17 @@
       <div class="zonebar"><span class="z1">0</span><span class="z2">1–4</span><span class="z3">5–8 ⇄</span><span class="z4">9–12</span></div>
       <ul>
         <li><b>0</b> = machinelaag stil (<code>*-</code>) — alleen wash + jouw spel.</li>
-        <li><b>1–4</b> = spaarzaam en tam, patroon ververst elke 4 maten.</li>
-        <li><b>5–8</b> = de <b>spookzone</b>: ~1 op 3 slagen speelt <b>achterstevoren</b>; verversen elke 2 maten.</li>
-        <li><b>9–12</b> = chaos: octaafsprongen, vlaag-noten, elke maat een nieuw patroon. Alles weer vooruit.</li>
+        <li><b>1–4</b> = korte <b>tikjes</b> (±⅛ s) die in de galm uitsterven; patroon ververst elke 4 maten.</li>
+        <li><b>5–8</b> = de <b>spookzone</b>: langere flarden, ~1 op 3 <b>achterstevoren</b>; verversen elke 2 maten.</li>
+        <li><b>9–12</b> = chaos: het sample klinkt vol uit, octaafsprongen, vlaag-noten, elke maat een nieuw patroon.</li>
+      </ul>
+    </div>
+    <div class="knobcard">
+      <h4>Tonen <span class="range">0–10</span></h4>
+      <ul>
+        <li>Laat de beats per maat van <b>toonhoogte zwerven</b>.</li>
+        <li><b>0</b> = strak bij je melodie &middot; <b>10</b> = wilde sprongen tot een octaaf.</li>
+        <li>Start op 3.</li>
       </ul>
     </div>
     <div class="knobcard">
@@ -402,8 +412,8 @@
     <div class="knobcard">
       <h4>Adem <span class="range">0–10</span></h4>
       <ul>
-        <li>Hoe diep het filter op de wash in- en uitademt.</li>
-        <li><b>0 = stilstaand filter</b>, 10 = diepe golven.</li>
+        <li>Hoe diep én snel het filter op de wash ademt.</li>
+        <li><b>0 = stilstaand filter</b>, 10 = diepe, snelle golven.</li>
         <li>Start op 4.</li>
       </ul>
     </div>
@@ -419,7 +429,7 @@
     <h3>Het scherm lezen</h3>
     <ul>
       <li><b>Regen</b> = volume van wat binnenkomt &middot; <b>bliksem</b> = plotselinge klap &middot; <b>witte streep onderin</b> = noot van de BeatStep ontvangen.</li>
-      <li><b>Draai je aan de knop?</b> Positiebalk + weer-icoon verschijnen 2 s in de lucht (het zonnetje = de storm-stand).</li>
+      <li><b>Klik of draai je aan de knop?</b> Grote menu-box (naam + waarde + 5 stipjes) + positiebalk + weer-icoon verschijnen 2 s in de lucht.</li>
     </ul>
     <div class="screenline"><span>storm</span> <span class="k">CLK 124</span> <span>*6</span><span class="lbl2">normaal: weer &middot; tempo &middot; vangst</span></div>
     <div class="screenline"><span class="k">ECHO 5</span><span class="lbl2">2 s na klik/draai: menu-item + waarde</span></div>
@@ -477,7 +487,7 @@
 <div class="specstrip">
   <div><b>WM-1</b> Weermachine</div>
   <div>ESP32-S3 &middot; AMY-engine</div>
-  <div>sketch v0.13</div>
+  <div>sketch v0.15</div>
   <div>serienr. 001/001</div>
   <div>gebouwd 27–28 juli 2026 &middot; Sierk &amp; Claude</div>
   <div class="barcode" aria-hidden="true"></div>
