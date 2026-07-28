@@ -203,14 +203,21 @@ def chaos():
     if _density <= 0:
         _pattern = []
         return
+    # the knob shapes character, not just count: further right = wider
+    # intervals and more octave jumps around the played melody
+    intervals = (0, 0, 5, -5, 7, -7, 3, -3)[:2 + _density // 2]
+    oct_chance = 1 + _density // 3  # out of 10
+    spread = 4 + _density
     pat = []
     for i in range(_density):
         slot = random.randrange(0, 8)
         if _melody:
-            note = random.choice(_melody) + random.choice((-12, 0, 0, 12))
+            note = random.choice(_melody) + random.choice(intervals)
+            if random.randrange(0, 10) < oct_chance:
+                note += random.choice((-12, 12))
         else:
-            note = 60 + random.randrange(0, 31) - 15
-        vel = 0.6 + random.randrange(0, 4) / 10.0
+            note = 60 + random.randrange(0, 2 * spread + 1) - spread
+        vel = 0.55 + random.randrange(0, 5) / 10.0
         pat.append((slot, note, vel))
     _pattern = pat
 
@@ -306,13 +313,19 @@ def _beat_engine():
     _last_slot = slot
     if slot == 0:
         _bar_count += 1
-        if _bar_count % 4 == 0:
-            chaos()  # evolve every 4 bars
+        # further right = the pattern refreshes faster (4/2/1 bars)
+        rb = 4 if _density <= 4 else (2 if _density <= 8 else 1)
+        if _bar_count % rb == 0:
+            chaos()
     for sl, note, vel in _pattern:
         if sl == slot:
+            n = note
+            if _density >= 5 and random.randrange(0, 8) == 0:
+                n += random.choice((-7, -5, 5, 7))  # stray gust
+            n += random.randrange(-15, 16) / 100.0  # weather micro-drift
             _osc_rot += 1
             amy.send(osc=CHOP_OSCS[_osc_rot % 3], wave=amy.PCM,
-                     preset=CATCH_PRESET, note=note, vel=vel,
+                     preset=CATCH_PRESET, note=n, vel=vel,
                      amp={'const': 3.5})
 
 
