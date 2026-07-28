@@ -27,7 +27,7 @@ import micropython
 import midi
 import tulip
 
-VERSION = 'v0.15.4'
+VERSION = 'v0.15.5'
 WASH_OSC = 100
 LFO_OSC = 101
 CHOP_OSCS = (110, 111, 112)
@@ -646,9 +646,13 @@ def _service(_arg):
                          preset=CATCH_PRESET, note=n,
                          vel=0.4 + 0.6 * v / 127.0,
                          amp={'const': 3.5, 'vel': 1, 'eg0': 1})
-                # pads ring almost fully, but still fade before the
+                # velocity = length: a soft tap is a short tick, a hard
+                # hit rings almost fully — always fading before the
                 # recording's clicky end (pitch-aware window)
                 dur = 2000 / (2.0 ** ((n - 60) / 12.0)) - 200
+                vd = 120 + v * v * 1700 // 16129  # 30->~215ms, 127->1820
+                if vd < dur:
+                    dur = vd
                 if dur < 60:
                     dur = 60
                 elif dur > 1800:
