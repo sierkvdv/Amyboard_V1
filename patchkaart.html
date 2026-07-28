@@ -1,0 +1,291 @@
+<title>Weermachine — Patchkaart</title>
+<style>
+  :root {
+    --ground: #F2F3F0; --panel: #FFFFFF; --ink: #22272B; --ink-2: #5C666D;
+    --line: #D8DCD6; --accent: #1F8A99; --accent-soft: #E1F0F2;
+    --free: #5E7D46; --free-soft: #EAF0E2; --soon: #A66A1E; --soon-soft: #F6ECDC;
+    --pcb: #B0352C; --jack: #2B3238;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #14171A; --panel: #1C2126; --ink: #E8EBE6; --ink-2: #9AA6AD;
+      --line: #313A41; --accent: #4FC3D4; --accent-soft: #163338;
+      --free: #93B86B; --free-soft: #232E1C; --soon: #D79A45; --soon-soft: #372814;
+      --pcb: #D4564C; --jack: #0C0F12;
+    }
+  }
+  :root[data-theme="light"] {
+    --ground: #F2F3F0; --panel: #FFFFFF; --ink: #22272B; --ink-2: #5C666D;
+    --line: #D8DCD6; --accent: #1F8A99; --accent-soft: #E1F0F2;
+    --free: #5E7D46; --free-soft: #EAF0E2; --soon: #A66A1E; --soon-soft: #F6ECDC;
+    --pcb: #B0352C; --jack: #2B3238;
+  }
+  :root[data-theme="dark"] {
+    --ground: #14171A; --panel: #1C2126; --ink: #E8EBE6; --ink-2: #9AA6AD;
+    --line: #313A41; --accent: #4FC3D4; --accent-soft: #163338;
+    --free: #93B86B; --free-soft: #232E1C; --soon: #D79A45; --soon-soft: #372814;
+    --pcb: #D4564C; --jack: #0C0F12;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--ground); color: var(--ink);
+    font: 15px/1.55 "Segoe UI", system-ui, sans-serif;
+    margin: 0; padding: 28px 20px 60px;
+  }
+  .wrap { max-width: 1020px; margin: 0 auto; }
+  h1, h2, h3 { text-wrap: balance; }
+  h1 {
+    font-family: "Avenir Next Condensed", "Arial Narrow", "Segoe UI", sans-serif;
+    font-size: 34px; letter-spacing: .14em; margin: 0;
+    text-transform: uppercase;
+  }
+  h1 .bolt { color: var(--pcb); }
+  .sub { color: var(--ink-2); margin: 4px 0 0; font-size: 14px; }
+  header { border-bottom: 3px solid var(--pcb); padding-bottom: 14px; margin-bottom: 18px; }
+
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 14px 0 26px; font-size: 13px; }
+  .chip { display: inline-flex; align-items: center; gap: 7px; padding: 3px 11px;
+          border: 1px solid var(--line); border-radius: 999px; background: var(--panel); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .dot.busy { background: var(--accent); } .dot.free { background: var(--free); }
+  .dot.soon { background: var(--soon); }
+
+  .cols { display: grid; grid-template-columns: 250px 1fr; gap: 22px; align-items: start; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+
+  /* ---- het paneel ---- */
+  .board {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px 14px 18px; position: sticky; top: 14px;
+  }
+  .board h2 { font-size: 13px; letter-spacing: .12em; text-transform: uppercase;
+              color: var(--ink-2); margin: 0 0 10px; text-align: center; }
+  .usb { text-align: center; font-family: ui-monospace, Consolas, monospace; font-size: 11px;
+         color: var(--ink-2); border: 1.5px dashed var(--line); border-radius: 6px;
+         padding: 5px 4px; margin-bottom: 12px; }
+  .rowhead, .jrow { display: grid; grid-template-columns: 34px 1fr 1fr; gap: 6px; align-items: center; }
+  .rowhead { font-family: ui-monospace, Consolas, monospace; font-size: 10px;
+             color: var(--ink-2); text-transform: uppercase; letter-spacing: .08em;
+             margin-bottom: 4px; text-align: center; }
+  .jrow { margin: 7px 0; }
+  .rnum { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--ink-2);
+          text-align: center; }
+  .jack { display: flex; flex-direction: column; align-items: center; gap: 3px;
+          padding: 7px 2px 6px; border-radius: 8px; }
+  .jack .hole { width: 26px; height: 26px; border-radius: 50%; background: var(--jack);
+                border: 4px solid var(--line); box-shadow: inset 0 0 0 7px var(--panel); }
+  .jack.busy .hole { border-color: var(--accent); }
+  .jack.free .hole { border-color: var(--free); }
+  .jack.soon .hole { border-color: var(--soon); }
+  .jack.busy { background: var(--accent-soft); }
+  .jack.free { background: var(--free-soft); }
+  .jack.soon { background: var(--soon-soft); }
+  .jack .lbl { font-family: ui-monospace, Consolas, monospace; font-size: 10.5px;
+               letter-spacing: .02em; text-align: center; line-height: 1.25; }
+  .sidebits { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px;
+              font-size: 12px; color: var(--ink-2); }
+  .sidebits b { color: var(--ink); font-weight: 600; }
+
+  /* ---- rij-uitleg ---- */
+  .rows { display: flex; flex-direction: column; gap: 14px; }
+  .rowcard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+             padding: 14px 16px; }
+  .rowcard h3 { margin: 0 0 8px; font-size: 15px; }
+  .rowcard h3 .tag { font-family: ui-monospace, Consolas, monospace; font-size: 11px;
+                     color: var(--ink-2); margin-right: 8px; }
+  .io { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 560px) { .io { grid-template-columns: 1fr; } }
+  .io .cell { border-left: 3px solid var(--line); padding-left: 10px; font-size: 13.5px; }
+  .io .cell.busy { border-left-color: var(--accent); }
+  .io .cell.free { border-left-color: var(--free); }
+  .io .cell.soon { border-left-color: var(--soon); }
+  .io .who { font-family: ui-monospace, Consolas, monospace; font-size: 11px;
+             text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2);
+             display: block; margin-bottom: 2px; }
+  .io b { font-weight: 600; }
+
+  /* ---- kaarten onderaan ---- */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+           gap: 14px; margin-top: 26px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+          padding: 16px 18px; }
+  .card h3 { margin: 0 0 10px; font-size: 13px; letter-spacing: .11em;
+             text-transform: uppercase; color: var(--accent); }
+  .card ul { margin: 0; padding-left: 18px; font-size: 13.5px; }
+  .card li { margin: 5px 0; }
+  .card .mono, code { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px;
+                      background: var(--ground); border: 1px solid var(--line);
+                      border-radius: 4px; padding: 0 5px; }
+  .warn { border-left: 4px solid var(--pcb); }
+  .warn h3 { color: var(--pcb); }
+
+  .screenline { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+                font-family: ui-monospace, Consolas, monospace; font-size: 13px;
+                background: var(--jack); color: #DDE6DA; border-radius: 6px;
+                padding: 8px 12px; margin: 8px 0; }
+  .screenline .k { color: #8FE3F0; }
+
+  footer { margin-top: 34px; color: var(--ink-2); font-size: 12.5px;
+           border-top: 1px solid var(--line); padding-top: 12px; }
+
+  @media print {
+    body { padding: 0; font-size: 12px; }
+    .board { position: static; }
+    .card, .rowcard, .board { break-inside: avoid; border-color: #bbb; }
+  }
+</style>
+
+<div class="wrap">
+<header>
+  <h1>Weermachine <span class="bolt">⌁</span> patchkaart</h1>
+  <p class="sub">AMYboard · firmware-sketch v0.7 · bijgewerkt 28 juli 2026 · leg naast het board, druk af, of open op je telefoon</p>
+</header>
+
+<div class="legend">
+  <span class="chip"><span class="dot busy"></span> in gebruik</span>
+  <span class="chip"><span class="dot free"></span> vrij</span>
+  <span class="chip"><span class="dot soon"></span> wacht op stereo-kabeltje</span>
+</div>
+
+<div class="cols">
+
+  <aside class="board">
+    <h2>Het paneel (USB-kant boven)</h2>
+    <div class="usb">USB-C · stroom + computerlijn</div>
+    <div class="rowhead"><span></span><span>links = IN</span><span>rechts = UIT</span></div>
+
+    <div class="jrow"><span class="rnum">R1</span>
+      <span class="jack free"><span class="hole"></span><span class="lbl">S/PDIF in</span></span>
+      <span class="jack free"><span class="hole"></span><span class="lbl">S/PDIF uit</span></span>
+    </div>
+    <div class="jrow"><span class="rnum">R2</span>
+      <span class="jack busy"><span class="hole"></span><span class="lbl">LINE IN<br>muziek erin</span></span>
+      <span class="jack busy"><span class="hole"></span><span class="lbl">LINE UIT<br>koptel/mixer</span></span>
+    </div>
+    <div class="jrow"><span class="rnum">R3</span>
+      <span class="jack soon"><span class="hole"></span><span class="lbl">MIDI IN<br>BeatStep straks</span></span>
+      <span class="jack free"><span class="hole"></span><span class="lbl">MIDI UIT</span></span>
+    </div>
+    <div class="jrow"><span class="rnum">R4</span>
+      <span class="jack busy"><span class="hole"></span><span class="lbl">CV1 IN<br>clock-pulsen</span></span>
+      <span class="jack busy"><span class="hole"></span><span class="lbl">CV1 UIT<br>weer-golf</span></span>
+    </div>
+    <div class="jrow"><span class="rnum">R5</span>
+      <span class="jack free"><span class="hole"></span><span class="lbl">CV2 IN</span></span>
+      <span class="jack busy"><span class="hole"></span><span class="lbl">CV2 UIT<br>gates 5V</span></span>
+    </div>
+
+    <div class="sidebits">
+      <b>Zijkant:</b> USB-C · microSD (later: sample-opslag) · knopjes <b>RST</b> (herstart) en <b>BOOT</b><br>
+      <b>Achterkant:</b> DIP-schakelaars 1–4 · Eurorack-voeding (10-pins) · I2C (knop &amp; scherm)
+    </div>
+  </aside>
+
+  <div class="rows">
+    <div class="rowcard">
+      <h3><span class="tag">R1</span>S/PDIF — digitale audio</h3>
+      <div class="io">
+        <div class="cell free"><span class="who">in · vrij</span>Digitale audiobron erin (nog niets mee gebouwd).</div>
+        <div class="cell free"><span class="who">uit · vrij</span>Digitaal uit — o.a. om een tweede AMYboard door te lussen.</div>
+      </div>
+    </div>
+
+    <div class="rowcard">
+      <h3><span class="tag">R2</span>Line — de audio-poorten</h3>
+      <div class="io">
+        <div class="cell busy"><span class="who">in · muziek erin</span><b>Alles wat hier binnenkomt</b> (nu je pc; straks DJ-mixer of 303) krijgt de wash-effecten, laat het régenen op het scherm, én is het vangmateriaal voor de sampler. Lijnniveau — DIP-schakelaars blijven UIT.</div>
+        <div class="cell busy"><span class="who">uit · alles eruit</span>Koptelefoon of mixerkanaal. Hier komt de totale mix uit: doorvoer + beats + straks de drone-laag.</div>
+      </div>
+    </div>
+
+    <div class="rowcard">
+      <h3><span class="tag">R3</span>MIDI — wacht op één stereo-minijackkabeltje</h3>
+      <div class="io">
+        <div class="cell soon"><span class="who">in · binnenkort</span><b>BeatStep MIDI OUT → hier.</b> Dan: sample-strakke clock, start/stop, noten van je sequences en alle 16 encoders als macro-knoppen. Werkt met elk gewoon stereo-aux-kabeltje (ingang snapt type A én B vanzelf).</div>
+        <div class="cell free"><span class="who">uit · vrij</span>Later: de Weermachine stuurt zélf MIDI (bijv. terug naar de BeatStep of andere synths).</div>
+      </div>
+    </div>
+
+    <div class="rowcard">
+      <h3><span class="tag">R4</span>CV 1 — klok in, weer uit</h3>
+      <div class="io">
+        <div class="cell busy"><span class="who">in · tempo-volger</span><b>BeatStep CLOCK OUT → hier</b> (mono-kabeltje). Analoge tel-pulsjes; de machine leest ze en volgt jouw tempoknop. Scherm toont dan <code>CLK</code> + BPM. Geen pulsjes (2,5 s) → terug naar eigen 120.</div>
+        <div class="cell busy"><span class="who">uit · weer-golf</span>Trage golfspanning die <b>meegolft met de storm</b>: harde muziek = wildere golf. Bedoeld voor een filter-CV-ingang (straks je Behringer 2600) — je muziek stuurt dan het filter van je modular.</div>
+      </div>
+    </div>
+
+    <div class="rowcard">
+      <h3><span class="tag">R5</span>CV 2 — reserve in, gates uit</h3>
+      <div class="io">
+        <div class="cell free"><span class="who">in · vrij</span>Extra modulatie-ingang of meetlus. Leest −10 V tot ~+5,6 V (op USB-voeding).</div>
+        <div class="cell busy"><span class="who">uit · gates</span><b>5V-blokpuls op elke kwartnoot</b>, in het gevolgde tempo. Recht in de gate-ingang van je Behringer (drempel 4 V — ruim gehaald) of elke andere trigger-ingang.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <h3>De draaiknop</h3>
+    <ul>
+      <li><b>Klik</b> = vang nú 2 seconden van wat er binnenkomt (<code>REC</code> op het scherm) → er start meteen een vers beat-patroon van die vangst.</li>
+      <li><b>Draaien</b> = intensiteit van de beats: 2 (spaarzaam) t/m 12 (mitrailleur). Staat onderin als <code>*6</code>.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Het scherm lezen</h3>
+    <ul>
+      <li><b>Regen</b> = volume van wat binnenkomt · <b>bliksem</b> = plotselinge klap · kop flitst mee.</li>
+      <li>Onderbalk, van links naar rechts:</li>
+    </ul>
+    <div class="screenline"><span>storm</span> <span class="k">CLK 124</span> <span>*6</span></div>
+    <ul>
+      <li>weerwoord (<code>calm / breeze / rain / STORM</code>)</li>
+      <li>tempo — <code>CLK</code> ervoor = hij volgt je Arturia; alleen een getal = eigen tempo (120)</li>
+      <li>vangst — <code>REC</code> = aan het opnemen · <code>*n</code> = sample geladen, intensiteit n · <code>--</code> = nog niks gevangen</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Vanzelf, zonder knoppen</h3>
+    <ul>
+      <li>Eerste geluid na stilte → <b>vangt automatisch</b> de eerste 2 seconden.</li>
+      <li>Beat-patroon <b>hussalt zichzelf elke 4 maten</b> opnieuw.</li>
+      <li>Muziek stoppen → <b>beats spelen door</b> (de vangst leeft in het board).</li>
+      <li>Board aan = alles start vanzelf op; computer niet nodig.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Nu aangesloten</h3>
+    <ul>
+      <li>PC groene uitgang → <b>R2 line in</b> (mono-kabeltje)</li>
+      <li>Koptelefoon → <b>R2 line uit</b></li>
+      <li>BeatStep CLOCK OUT → <b>R4 CV1 in</b> (mono-kabeltje)</li>
+      <li>USB-C → desktop (stroom + bedieningslijn)</li>
+    </ul>
+  </div>
+
+  <div class="card warn">
+    <h3>Noodgrepen &amp; veiligheid</h3>
+    <ul>
+      <li><b>RST</b> kort drukken = herstart (alles komt vanzelf terug).</li>
+      <li><b>BOOT vasthouden tijdens aanzetten</b> = programma overslaan (noodstand) + zelftest.</li>
+      <li>DIP-schakelaars achterop: <b>alle 4 UIT</b> = lijnniveau (nu). Alle 4 AAN = modular 10 Vpp — <b>nooit</b> de uitgang op AAN met een koptelefoon erin. 1&amp;2 = ingang, 3&amp;4 = uitgang.</li>
+      <li>CV-poorten kunnen ±10 V hebben; line-poorten niet.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Volgende upgrades</h3>
+    <ul>
+      <li><b>Stereo-minijackkabeltje</b> (bestellen!) → MIDI in → sample-strakke sync + BeatStep-knoppen als macro's.</li>
+      <li>Verhuizing woonkamer: Eurorack-stroom, CV1-uit → filter Behringer, CV2-uit → gate Behringer.</li>
+      <li>Drone-laag (Juno-pads in de toonsoort), effect-knoppen &amp; droog-stand, scenes op pads.</li>
+    </ul>
+  </div>
+</div>
+
+<footer>Weermachine — tempo-locked soundscape-instrument · AMYboard (ESP32-S3, AMY-engine) · sketch v0.7 · gebouwd 27–28 juli 2026 door Sierk &amp; Claude</footer>
+</div>

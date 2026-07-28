@@ -1,0 +1,11 @@
+{
+  "note": "CV loopback calibration, 2026-07-27, board on USB power only. Linear fits over set range -10..+6V (readings above ADC ceiling excluded). Values are COMBINED DAC+ADC error per path; absolute DAC truth gets a final trim against the Behringer 2600 by ear/tuner in M2. Provisional endpoint fits, residuals ~ +/-15 mV (~18 cents).",
+  "adc_positive_ceiling_V": 5.648,
+  "adc_noise_spread_V": 0.008,
+  "paths": {
+    "out0_in0": { "scale": 0.9833, "offset_V": -0.624 },
+    "out0_in1": { "scale": 0.9764, "offset_V": -0.585 },
+    "out1_in1": { "scale": 0.9928, "offset_V": -0.458 }
+  },
+  "raw_sweeps_in_patchnotes": true
+}
