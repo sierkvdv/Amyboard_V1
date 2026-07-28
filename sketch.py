@@ -27,7 +27,7 @@ import micropython
 import midi
 import tulip
 
-VERSION = 'v0.15.1'
+VERSION = 'v0.15.2'
 WASH_OSC = 100
 LFO_OSC = 101
 CHOP_OSCS = (110, 111, 112)
@@ -57,10 +57,11 @@ def setup_audio():
     amy.chorus(0.6, 320, 0.25, 0.7)
     amy.echo(0.5, 500, 1000, 0.6, 0.5)
     amy.reverb(0.8, 0.97, 0.4, 3000)
-    # 150 ms release on the chop voices: timed note-offs FADE instead of
-    # cutting hard (a hard vel=0 mid-waveform crackles — ear-proven A/B)
+    # chop voice envelope: 8 ms attack (a 0 ms start mid-waveform clicks,
+    # since catches begin mid-music) + 150 ms release so timed note-offs
+    # FADE instead of cutting hard (hard cuts crackle — ear-proven A/B)
     for osc in CHOP_OSCS:
-        amy.send(osc=osc, bp0='0,1.0,150,0')
+        amy.send(osc=osc, bp0='8,1.0,150,0')
 
 
 try:
@@ -407,6 +408,12 @@ def _beat_engine():
             n = note + _bar_shift
             if _density >= 5 and random.randrange(0, 8) == 0:
                 n += random.choice((-7, -5, 5, 7))  # stray gust
+            # stacked shifts can add up to a 20x-speed chirp-zap; keep
+            # hits within two octaves of the sample's home pitch
+            if n < 36:
+                n = 36
+            elif n > 84:
+                n = 84
             n += random.randrange(-15, 16) / 100.0  # weather micro-drift
             _osc_rot += 1
             osc = CHOP_OSCS[_osc_rot % 3]
