@@ -1,5 +1,8 @@
-# WEERMACHINE v0.16 — resident sketch: WASH + weather display + STORMVANGER.
-# New in v0.16:
+# WEERMACHINE v0.16.2 — resident sketch: WASH + weather display + STORMVANGER.
+# v0.16.1/2: encoder polled every 30 ms pass (render-gated polling
+#    bundled turns into twitchy bursts); 5 chop voices instead of 3
+#    (voice stealing restarts the PCM mid-wave = tick).
+# v0.16:
 #  - pads behave like keys: the sample sounds WHILE held and fades on
 #    release (note-off). Machine hits unaffected.
 # v0.15:
@@ -30,10 +33,12 @@ import micropython
 import midi
 import tulip
 
-VERSION = 'v0.16'
+VERSION = 'v0.16.2'
 WASH_OSC = 100
 LFO_OSC = 101
-CHOP_OSCS = (110, 111, 112)
+CHOP_OSCS = (110, 111, 112, 113, 114)  # 5 voices: fewer steal-clicks
+                                       # (a stolen voice restarts the
+                                       # PCM mid-wave = tick)
 CATCH_PRESET = 40  # LOW preset slot! 1024 (per docs) is an invalid
                    # recording slot on fw 2026-07-26 — records vanish.
 REV_PRESET = 41    # Python-built reversed copy (1 s, mono 22.05 kHz)
@@ -442,7 +447,7 @@ def _beat_engine():
                 n = 84
             n += random.randrange(-15, 16) / 100.0  # weather micro-drift
             _osc_rot += 1
-            osc = CHOP_OSCS[_osc_rot % 3]
+            osc = CHOP_OSCS[_osc_rot % len(CHOP_OSCS)]
             amy.send(osc=osc, wave=amy.PCM,
                      preset=REV_PRESET if rev else CATCH_PRESET,
                      note=n, vel=vel,
@@ -651,7 +656,7 @@ def _service(_arg):
             _hit_flash = 2  # always show reception, even before a catch
             if _have_sample and not _rec_until:
                 _osc_rot += 1
-                osc = CHOP_OSCS[_osc_rot % 3]
+                osc = CHOP_OSCS[_osc_rot % len(CHOP_OSCS)]
                 _cuts = [c for c in _cuts if c[0] != osc]
                 _live[:] = [e for e in _live if e[1] != osc]
                 amy.send(osc=osc, wave=amy.PCM,
@@ -717,27 +722,11 @@ def _service(_arg):
             _gate_tick((tulip.seq_ticks() // 24) % 8)
         _beat_engine()
 
-        if time.ticks_diff(now, _last_render) < FRAME_MS:
-            return
-        _last_render = now
-        _frame += 1
-
-        peak = _input_peak()
-        target = peak / 8000.0
-        if target > 1.0:
-            target = 1.0
-        _level += 0.12 * (target - _level)
-
-        # auto-catch: silence -> audio = grab the first bars automatically
-        if _auto_armed and not _rec_until and _level > 0.2:
-            _auto_armed = False
-            start_catch(4)
-        if _level < 0.03 and not _auto_armed and not _rec_until:
-            _auto_armed = True  # re-arm during silence for next session
-
         # encoder: click = next menu item, turn = value of that item,
-        # keep turning left past the bottom = fresh catch (re-record)
-        if _has_enc and _frame % 2 == 0:
+        # keep turning left past the bottom = fresh catch (re-record).
+        # Polled EVERY pass (30 ms): the old render-gated poll (~320 ms)
+        # bundled fast turns into multi-step bursts — felt twitchy.
+        if _has_enc:
             try:
                 pos = _enc.read(0)
                 delta = 0
@@ -751,7 +740,14 @@ def _service(_arg):
                         delta = _enc_accum // 2
                     elif _enc_accum <= -2:
                         delta = -((-_enc_accum) // 2)
-                    _enc_accum -= delta * 2
+                    if delta > 2:
+                        delta = 2      # swallow bursts (e.g. queued turns
+                        _enc_accum = 0  # from the blocking catch second)
+                    elif delta < -2:
+                        delta = -2
+                        _enc_accum = 0
+                    else:
+                        _enc_accum -= delta * 2
                 if delta:
                     if _menu == 0:
                         at_min = _density <= 0
@@ -798,6 +794,24 @@ def _service(_arg):
                 _btn_down = pressed
             except Exception:
                 pass
+
+        if time.ticks_diff(now, _last_render) < FRAME_MS:
+            return
+        _last_render = now
+        _frame += 1
+
+        peak = _input_peak()
+        target = peak / 8000.0
+        if target > 1.0:
+            target = 1.0
+        _level += 0.12 * (target - _level)
+
+        # auto-catch: silence -> audio = grab the first bars automatically
+        if _auto_armed and not _rec_until and _level > 0.2:
+            _auto_armed = False
+            start_catch(4)
+        if _level < 0.03 and not _auto_armed and not _rec_until:
+            _auto_armed = True  # re-arm during silence for next session
 
         # lightning
         if _cooldown > 0:
