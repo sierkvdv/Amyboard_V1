@@ -34,3 +34,6 @@ AMYboard (2× CV in ADS1015 12-bit ±10V, 2× CV uit GP8413 ±10V, TRS MIDI, lin
 
 ## Open
 Stereo-kabel voor sample-strakke opname, effect-macro's/droog-stand, drone-laag, bugs melden.
+
+## Stand
+- Stand: onbekend per 11-11-2026, laatste commit 24-09-2026. Open punten: zie "Open" hierboven.
